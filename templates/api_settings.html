@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>第三方 API 设置</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Header -->
+        <div class="mb-8">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-cog mr-3 text-indigo-600"></i>第三方 API 设置
+                    </h1>
+                    <p class="text-gray-600">配置 AI 模型 API 以启用智能分析功能</p>
+                </div>
+                <a href="/" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors">
+                    <i class="fas fa-arrow-left mr-2"></i>返回主页
+                </a>
+            </div>
+        </div>
+
+        <!-- Settings Form -->
+        <div class="bg-white rounded-2xl shadow-xl p-8">
+            <form id="settingsForm" class="space-y-6">
+                <!-- API Key -->
+                <div>
+                    <label for="apiKey" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-key mr-2 text-indigo-600"></i>API Key
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="apiKey" 
+                        name="apiKey"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        placeholder="sk-..."
+                        required
+                    >
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>请妥善保管您的 API Key，不要泄露给他人
+                    </p>
+                </div>
+
+                <!-- Base URL -->
+                <div>
+                    <label for="baseUrl" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-link mr-2 text-indigo-600"></i>Base URL
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="url" 
+                        id="baseUrl" 
+                        name="baseUrl"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        placeholder="https://api.openai.com/v1"
+                        required
+                    >
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>API 服务的基础 URL 地址
+                    </p>
+                </div>
+
+                <!-- Model Provider -->
+                <div>
+                    <label for="modelProvider" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-server mr-2 text-indigo-600"></i>Model Provider
+                    </label>
+                    <select 
+                        id="modelProvider" 
+                        name="modelProvider"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                        <option value="openai">OpenAI</option>
+                        <option value="openai-completion">OpenAI Completion</option>
+                        <option value="azure">Azure OpenAI</option>
+                        <option value="anthropic">Anthropic (Claude)</option>
+                        <option value="qwen">通义千问</option>
+                        <option value="zhipu">智谱 AI</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>选择您使用的 AI 模型提供商
+                    </p>
+                </div>
+
+                <!-- Model Name -->
+                <div>
+                    <label for="modelName" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-robot mr-2 text-indigo-600"></i>模型名称
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="modelName" 
+                        name="modelName"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        placeholder="gpt-4o"
+                        required
+                    >
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>例如：gpt-4o, gpt-3.5-turbo, claude-3-opus 等
+                    </p>
+                </div>
+
+                <!-- Temperature -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label for="temperature" class="text-sm font-semibold text-gray-700">
+                            <i class="fas fa-thermometer-half mr-2 text-indigo-600"></i>Temperature
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="enableTemperature" class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" onchange="toggleTemperature()">
+                            <span class="ml-2 text-sm text-gray-600">自定义</span>
+                        </label>
+                    </div>
+                    <div id="temperatureControl" class="hidden">
+                        <div class="flex items-center space-x-4">
+                            <input 
+                                type="range" 
+                                id="temperature" 
+                                name="temperature"
+                                min="0" 
+                                max="2" 
+                                step="0.1" 
+                                value="0.7"
+                                class="flex-1"
+                                oninput="document.getElementById('temperatureValue').textContent = this.value"
+                            >
+                            <span id="temperatureValue" class="text-sm font-semibold text-gray-700 w-12 text-center">0.7</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>控制输出的随机性，0-2 之间，值越高越随机。<strong>默认: 0.7</strong>
+                    </p>
+                </div>
+
+                <!-- Max Tokens -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label for="maxTokens" class="text-sm font-semibold text-gray-700">
+                            <i class="fas fa-align-left mr-2 text-indigo-600"></i>Max Tokens
+                        </label>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="enableMaxTokens" class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" onchange="toggleMaxTokens()">
+                            <span class="ml-2 text-sm text-gray-600">自定义</span>
+                        </label>
+                    </div>
+                    <div id="maxTokensControl" class="hidden">
+                        <input 
+                            type="number" 
+                            id="maxTokens" 
+                            name="maxTokens"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            placeholder="4000"
+                            value="4000"
+                            min="1"
+                            max="128000"
+                        >
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>生成文本的最大长度限制。<strong>默认: 4000</strong> (约3000中文字)
+                    </p>
+                </div>
+
+                <!-- Custom Prompt -->
+                <div>
+                    <label for="systemPrompt" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>自定义提示词
+                        <span class="text-gray-500 text-xs font-normal ml-2">(可选)</span>
+                    </label>
+                    <p class="text-xs text-gray-600 mb-2">
+                        <i class="fas fa-info-circle mr-1"></i>请在提示词中使用 <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">{transcript}</code> 作为占位符，将被替换为实际转录内容
+                    </p>
+                    <textarea 
+                        id="systemPrompt" 
+                        name="systemPrompt"
+                        rows="12"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm"
+                        placeholder="请你扮演一名"课程笔记精简&排版编辑"，对我提供的 Markdown 课程文档进行重排、精简和结构优化..."
+                    ></textarea>
+                    <div class="flex justify-between items-center mt-2">
+                        <button 
+                            type="button" 
+                            onclick="useDefaultPrompt()" 
+                            class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                        >
+                            <i class="fas fa-undo mr-1"></i>使用默认提示词
+                        </button>
+                        <p class="text-xs text-gray-500">
+                            设置 AI 整理转录文本的方式和风格
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex space-x-4 pt-4">
+                    <button 
+                        type="button" 
+                        onclick="testConnection()" 
+                        class="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
+                        id="testBtn"
+                    >
+                        <i class="fas fa-plug mr-2"></i>测试连接
+                    </button>
+                    <button 
+                        type="submit" 
+                        class="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors"
+                        id="saveBtn"
+                    >
+                        <i class="fas fa-save mr-2"></i>保存设置
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Status Message -->
+        <div id="statusMessage" class="mt-4 hidden">
+            <div class="bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 rounded" role="alert">
+                <p class="font-bold">提示</p>
+                <p id="statusText"></p>
+            </div>
+        </div>
+
+        <!-- Quick Setup Guide -->
+        <div class="mt-8 bg-white rounded-2xl shadow-xl p-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-book mr-2 text-indigo-600"></i>快速设置指南
+            </h2>
+            <div class="space-y-4 text-sm text-gray-600">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
+                        <span class="text-indigo-600 font-bold">1</span>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-gray-700 mb-1">获取 API Key</p>
+                        <p>前往您选择的 AI 服务提供商官网注册账号并获取 API Key</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
+                        <span class="text-indigo-600 font-bold">2</span>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-gray-700 mb-1">填写配置信息</p>
+                        <p>在上方表单中填入 API Key、Base URL 和模型名称等必填信息</p>
+                    </div>
+                </div>
+                <div class="flex items-start">
+                    <div class="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center mr-3">
+                        <span class="text-indigo-600 font-bold">3</span>
+                    </div>
+                    <div>
+                        <p class="font-semibold text-gray-700 mb-1">测试并保存</p>
+                        <p>点击"测试连接"确认配置正确，然后点击"保存设置"</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Common Providers -->
+        <div class="mt-8 bg-white rounded-2xl shadow-xl p-8">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-cloud mr-2 text-indigo-600"></i>常用服务商配置示例
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-700 mb-2">OpenAI 官方</h3>
+                    <p class="text-gray-600 mb-1"><strong>Base URL:</strong> https://api.openai.com/v1</p>
+                    <p class="text-gray-600"><strong>模型:</strong> gpt-4o, gpt-3.5-turbo</p>
+                </div>
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-700 mb-2">Azure OpenAI</h3>
+                    <p class="text-gray-600 mb-1"><strong>Base URL:</strong> https://your-resource.openai.azure.com</p>
+                    <p class="text-gray-600"><strong>模型:</strong> 您部署的模型名称</p>
+                </div>
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-700 mb-2">通义千问</h3>
+                    <p class="text-gray-600 mb-1"><strong>Base URL:</strong> https://dashscope.aliyuncs.com/compatible-mode/v1</p>
+                    <p class="text-gray-600"><strong>模型:</strong> qwen-turbo, qwen-plus</p>
+                </div>
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <h3 class="font-semibold text-gray-700 mb-2">第三方代理</h3>
+                    <p class="text-gray-600 mb-1"><strong>Base URL:</strong> 代理商提供的 URL</p>
+                    <p class="text-gray-600"><strong>模型:</strong> 支持的模型列表</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 默认提示词
+        const DEFAULT_PROMPT = `请你扮演一名"课程笔记精简&排版编辑"，对我提供的 Markdown 课程文档进行重排、精简和结构优化。要求如下：
+
+## 文档信息
+标题：{title}
+
+## 整体风格
+- 保留所有核心观点和方法论，删除或压缩废话、营销语、重复说明
+- 风格偏向知识笔记/复习大纲，而不是长篇教程文案
+- 语言简洁、直接，句子能短就短
+
+## 结构调整
+用少量清晰的一级、二级标题组织内容，例如：
+- 一、课程主题/正确认知
+- 二、核心目标/根本目的
+- 三、常见错误或禁忌
+- 四、核心方法/技巧
+- 五、练习与作业/实战
+
+要求：
+- 尽量合并重复或碎片化的小节，避免"第一节/第二节/第三节"式的细碎结构，如果内容相近就归为同一大块
+- 保持目录层级不超过2-3级，避免过深的标题嵌套
+
+## 内容精简方式
+- 将能列表化的内容，尽量改成有条理的项目符号或编号列表
+- 同一意思只保留一次表达：若原文在不同小节重复同一个观点，合并到一个地方，用1-2句说清
+- 删除或压缩以下内容：
+  - 过度铺陈、空话和情绪化语句（如"通过本课程你将能够……"之类）
+  - 冗长的过渡句、赘述的"背景介绍"
+  - 过多、类似的例子，只保留最典型1-2个
+
+## 重点呈现方式
+- 用粗体强调关键概念和步骤（例如：**发散性思维**、**平移思维**、**需求感过强**）
+- 对"方法/技巧"类内容，用清晰的结构呈现：
+  1. 定义
+  2. 使用步骤
+  3. 示例
+  4. 适用场景/注意点（如果原文有）
+- 对"禁忌/错误"类内容，整合成一个汇总列表，避免散落多处重复说
+
+## 示例与比喻
+- 保留有助理解的例子和比喻，但删除明显重复或价值不高的例子
+- 示例尽量简短，能用1-2条对话或一个场景说明的，不拉长叙述
+
+## 练习与作业部分
+- 独立成一个"练习/作业/实战应用"模块
+- 用列表列出具体要做的事情和频次（如"每天练习20个关键词"），方便执行和回顾
+
+## 输出格式
+- 只输出修改后的整篇Markdown文本，不需要解释，不要加无关前后缀
+- 保持语种和原文一致（原文是中文就全中文）
+
+转录文本：
+{transcript}
+
+请开始整理：`;
+
+        // 使用默认提示词
+        function useDefaultPrompt() {
+            document.getElementById('systemPrompt').value = DEFAULT_PROMPT;
+            showStatus('已恢复为默认提示词', 'success');
+        }
+
+        // 切换Temperature设置
+        function toggleTemperature() {
+            const checkbox = document.getElementById('enableTemperature');
+            const control = document.getElementById('temperatureControl');
+            
+            if (checkbox.checked) {
+                control.classList.remove('hidden');
+            } else {
+                control.classList.add('hidden');
+            }
+        }
+
+        // 切换Max Tokens设置
+        function toggleMaxTokens() {
+            const checkbox = document.getElementById('enableMaxTokens');
+            const control = document.getElementById('maxTokensControl');
+            
+            if (checkbox.checked) {
+                control.classList.remove('hidden');
+            } else {
+                control.classList.add('hidden');
+            }
+        }
+
+        // 页面加载时获取当前设置
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const response = await fetch('/api/get_config');
+                if (response.ok) {
+                    const config = await response.json();
+                    
+                    if (config.api_key) document.getElementById('apiKey').value = config.api_key;
+                    if (config.base_url) document.getElementById('baseUrl').value = config.base_url;
+                    if (config.model_provider) document.getElementById('modelProvider').value = config.model_provider;
+                    if (config.model_name) document.getElementById('modelName').value = config.model_name;
+                    
+                    // Temperature设置
+                    if (config.temperature !== undefined && config.temperature !== null) {
+                        document.getElementById('enableTemperature').checked = true;
+                        document.getElementById('temperatureControl').classList.remove('hidden');
+                        document.getElementById('temperature').value = config.temperature;
+                        document.getElementById('temperatureValue').textContent = config.temperature;
+                    }
+                    
+                    // Max Tokens设置
+                    if (config.max_tokens) {
+                        document.getElementById('enableMaxTokens').checked = true;
+                        document.getElementById('maxTokensControl').classList.remove('hidden');
+                        document.getElementById('maxTokens').value = config.max_tokens;
+                    }
+                    
+                    if (config.default_system_prompt) document.getElementById('systemPrompt').value = config.default_system_prompt;
+                }
+            } catch (error) {
+                console.error('加载配置失败:', error);
+            }
+        });
+
+        // 显示状态消息
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusMessage');
+            const statusText = document.getElementById('statusText');
+            const statusContainer = statusDiv.querySelector('div');
+            
+            statusText.textContent = message;
+            statusDiv.classList.remove('hidden');
+            
+            // 设置颜色
+            statusContainer.className = 'p-4 rounded border-l-4';
+            if (type === 'success') {
+                statusContainer.classList.add('bg-green-100', 'border-green-500', 'text-green-700');
+            } else if (type === 'error') {
+                statusContainer.classList.add('bg-red-100', 'border-red-500', 'text-red-700');
+            } else {
+                statusContainer.classList.add('bg-blue-100', 'border-blue-500', 'text-blue-700');
+            }
+            
+            // 3秒后自动隐藏
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 3000);
+        }
+
+        // 测试连接
+        async function testConnection() {
+            const testBtn = document.getElementById('testBtn');
+            const originalText = testBtn.innerHTML;
+            
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>测试中...';
+            
+            try {
+                const formData = {
+                    api_key: document.getElementById('apiKey').value,
+                    base_url: document.getElementById('baseUrl').value,
+                    model_name: document.getElementById('modelName').value
+                };
+                
+                const response = await fetch('/api/test_connection', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('连接测试成功！API 配置正常。', 'success');
+                } else {
+                    showStatus('连接测试失败: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('连接测试失败: ' + error.message, 'error');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.innerHTML = originalText;
+            }
+        }
+
+        // 保存设置
+        document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const saveBtn = document.getElementById('saveBtn');
+            const originalText = saveBtn.innerHTML;
+            
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>保存中...';
+            
+            try {
+                const formData = {
+                    api_key: document.getElementById('apiKey').value,
+                    base_url: document.getElementById('baseUrl').value,
+                    model_provider: document.getElementById('modelProvider').value,
+                    model_name: document.getElementById('modelName').value,
+                    default_system_prompt: document.getElementById('systemPrompt').value
+                };
+                
+                // 只在勾选时才保存temperature
+                if (document.getElementById('enableTemperature').checked) {
+                    formData.temperature = parseFloat(document.getElementById('temperature').value);
+                } else {
+                    formData.temperature = null; // 明确设置为null表示使用默认值
+                }
+                
+                // 只在勾选时才保存max_tokens
+                if (document.getElementById('enableMaxTokens').checked) {
+                    const maxTokensValue = document.getElementById('maxTokens').value;
+                    formData.max_tokens = maxTokensValue ? parseInt(maxTokensValue) : null;
+                } else {
+                    formData.max_tokens = null; // 明确设置为null表示使用默认值
+                }
+                
+                const response = await fetch('/api/save_config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('设置保存成功！', 'success');
+                } else {
+                    showStatus('保存失败: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('保存失败: ' + error.message, 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = originalText;
+            }
+        });
+    </script>
+</body>
+</html>

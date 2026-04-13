@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视频转文字工具 - 增强版 v1.0.0</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .sortable-ghost {
+            opacity: 0.4;
+            background: #e0e7ff;
+        }
+        .video-item {
+            transition: all 0.3s ease;
+        }
+        .video-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .drag-handle {
+            cursor: move;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-6 max-w-7xl">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex-1"></div>
+                <div class="text-center flex-1">
+                    <h1 class="text-4xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-video mr-3 text-indigo-600"></i>视频转文字工具
+                    </h1>
+                    <p class="text-gray-600">批量处理 · 自定义顺序 · AI智能摘要</p>
+                    <p class="text-xs text-gray-400 mt-1">v1.0.0</p>
+                </div>
+                <div class="flex-1 flex justify-end space-x-2">
+                    <a href="/models" id="modelsLink" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center">
+                        <i class="fas fa-layer-group mr-2"></i>多模型配置
+                    </a>
+                    <a href="/settings" id="settingsLink" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center">
+                        <i class="fas fa-cog mr-2"></i>API 设置
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Panel: Upload & Video List -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Upload Area -->
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-cloud-upload-alt mr-2 text-indigo-600"></i>批量上传视频
+                    </h2>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-indigo-500 transition-colors cursor-pointer" id="dropZone">
+                        <input type="file" id="videoInput" accept="video/*,audio/*" multiple class="hidden">
+                        <i class="fas fa-cloud-upload-alt text-5xl text-gray-400 mb-3"></i>
+                        <p class="text-gray-600 mb-2">点击选择或拖拽多个视频/音频文件到此处</p>
+                        <p class="text-sm text-gray-500">支持 MP4, MP3, WAV, M4A 等视频和音频格式</p>
+                    </div>
+                </div>
+
+                <!-- Video List -->
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold text-gray-800">
+                            <i class="fas fa-list mr-2 text-indigo-600"></i>视频列表
+                            <span id="videoCount" class="text-sm text-gray-500 ml-2">(0个)</span>
+                        </h2>
+                        <button onclick="clearAll()" class="text-red-600 hover:text-red-800 text-sm font-medium">
+                            <i class="fas fa-trash mr-1"></i>清空全部
+                        </button>
+                    </div>
+                    <div id="videoList" class="space-y-2 min-h-[200px]">
+                        <p class="text-gray-400 text-center py-8">暂无视频，请上传</p>
+                    </div>
+                    <div class="mt-4 text-sm text-gray-500">
+                        <i class="fas fa-info-circle mr-1"></i>提示：拖动视频可调整处理顺序
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Settings -->
+            <div class="space-y-6">
+                <!-- Processing Settings -->
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-cog mr-2 text-indigo-600"></i>处理设置
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                Whisper模型
+                            </label>
+                            <select id="modelSize" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                <option value="tiny">Tiny - 最快 (39M, 速度快但准确度较低)</option>
+                                <option value="base" selected>Base - 推荐 (74M, 速度与准确度平衡)</option>
+                                <option value="small">Small - 较准确 (244M, 速度中等)</option>
+                                <option value="medium">Medium - 很准确 (769M, 速度较慢)</option>
+                                <option value="large">Large - 最准确 (1550M, 速度很慢)</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-1">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                <span class="font-semibold">配置较低？</span>建议使用 Tiny 或 Base 模型以提升速度
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                识别语言
+                            </label>
+                            <select id="whisperLanguage" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                <option value="zh" selected>中文</option>
+                                <option value="en">English</option>
+                                <option value="ja">日本語</option>
+                                <option value="ko">한국어</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="flex items-center cursor-pointer">
+                                <input type="checkbox" id="enableAI" checked class="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                                <span class="ml-2 text-sm text-gray-700">启用AI摘要</span>
+                            </label>
+                        </div>
+
+                        <div id="aiSettings" class="space-y-4 pt-2 border-t">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    AI模型
+                                </label>
+                                <select id="aiModel" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                    <option value="gpt-4o">gpt-4o</option>
+                                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                                    <option value="gpt-4-turbo">gpt-4-turbo</option>
+                                    <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                                    <option value="claude-4-sonnet-thinking">claude-4-sonnet-thinking</option>
+                                    <option value="claude-3-opus">claude-3-opus</option>
+                                    <option value="claude-3-sonnet">claude-3-sonnet</option>
+                                    <option value="qwen-turbo">qwen-turbo</option>
+                                    <option value="qwen-plus">qwen-plus</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    <i class="fas fa-info-circle mr-1"></i>从API设置中配置的模型自动加载
+                                </p>
+                            </div>
+
+                            <div>
+                                <p class="text-xs text-gray-500">
+                                    <i class="fas fa-info-circle mr-1"></i>自定义提示词请在 
+                                    <a href="/settings" class="text-indigo-600 hover:text-indigo-800 font-medium">API 设置</a> 中配置
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="startProcessing()" id="processBtn" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        <i class="fas fa-play mr-2"></i>开始处理
+                    </button>
+                </div>
+
+                <!-- API Settings -->
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-key mr-2 text-indigo-600"></i>API设置
+                    </h2>
+                    <button onclick="toggleApiSettings()" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                        <i class="fas fa-cog mr-1"></i>配置API密钥
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Section -->
+        <div id="progressSection" class="mt-6 bg-white rounded-2xl shadow-xl p-8 hidden">
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-3 mb-6 rounded">
+                <div class="flex items-center">
+                    <i class="fas fa-exclamation-triangle text-yellow-600 mr-2"></i>
+                    <p class="text-sm text-yellow-800">
+                        <strong>处理中，请勿离开此页面</strong> - 切换页面将导致任务丢失
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Left-Right Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Left: Progress Info -->
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">
+                            <i class="fas fa-spinner fa-spin mr-2 text-indigo-600"></i>处理中
+                        </h3>
+                        <span id="progressPercentage" class="text-2xl font-bold text-indigo-600">0%</span>
+                    </div>
+                    
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-gray-200 rounded-full h-3 mb-4 overflow-hidden">
+                        <div id="progressBar" class="bg-gradient-to-r from-indigo-500 to-purple-600 h-3 rounded-full transition-all duration-500 ease-out" style="width: 0%"></div>
+                    </div>
+                    
+                    <!-- Current Step -->
+                    <div class="mb-4">
+                        <p id="progressStep" class="text-sm font-semibold text-gray-700 mb-1">准备处理...</p>
+                        <p id="progressDetail" class="text-xs text-gray-500"></p>
+                    </div>
+                    
+                    <!-- Processing Details -->
+                    <div id="processingDetails" class="space-y-2 text-sm bg-gray-50 p-4 rounded-lg">
+                        <div class="flex items-center text-gray-600">
+                            <i class="fas fa-video mr-2 text-indigo-500"></i>
+                            <span id="currentVideo">等待开始...</span>
+                        </div>
+                        <div class="flex items-center text-gray-600">
+                            <i class="fas fa-clock mr-2 text-indigo-500"></i>
+                            <span id="elapsedTime">已用时: 0秒</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Right: Real-time Log Console -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-semibold text-gray-700">
+                            <i class="fas fa-terminal mr-2 text-green-600"></i>实时日志
+                        </h4>
+                        <button onclick="clearLogs()" class="text-xs text-gray-500 hover:text-gray-700">
+                            <i class="fas fa-trash mr-1"></i>清空
+                        </button>
+                    </div>
+                    <div id="logConsole" class="bg-gray-900 text-green-400 p-4 rounded-lg font-mono text-xs h-96 overflow-y-auto">
+                        <div class="text-gray-500">等待处理开始...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="resultSection" class="mt-6 hidden space-y-6">
+            <!-- Combined Transcript -->
+            <div class="bg-white rounded-2xl shadow-xl p-8">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-file-alt mr-2 text-indigo-600"></i>完整转录文本
+                    </h3>
+                    <div class="flex space-x-2">
+                        <button onclick="copyText('transcript', event)" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                            <i class="fas fa-copy mr-1"></i>复制
+                        </button>
+                        <button onclick="downloadText('transcript')" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                            <i class="fas fa-download mr-1"></i>下载
+                        </button>
+                    </div>
+                </div>
+                <div id="transcriptResult" class="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap font-mono"></div>
+            </div>
+
+            <!-- AI Summary -->
+            <div id="summarySection" class="bg-white rounded-2xl shadow-xl p-8 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-brain mr-2 text-indigo-600"></i>AI摘要
+                    </h3>
+                    <div class="flex space-x-2">
+                        <button onclick="copyText('summary', event)" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                            <i class="fas fa-copy mr-1"></i>复制
+                        </button>
+                        <button onclick="downloadText('summary')" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                            <i class="fas fa-download mr-1"></i>下载
+                        </button>
+                    </div>
+                </div>
+                <div id="summaryResult" class="prose max-w-none bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Settings Modal -->
+    <div id="apiModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-semibold text-gray-800">
+                    <i class="fas fa-key mr-2 text-indigo-600"></i>API设置
+                </h3>
+                <button onclick="toggleApiSettings()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">API Key</label>
+                    <input type="password" id="apiKey" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Base URL</label>
+                    <input type="text" id="baseUrl" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">默认模型</label>
+                    <input type="text" id="defaultModel" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                </div>
+            </div>
+            <div class="flex justify-end mt-6 space-x-2">
+                <button onclick="toggleApiSettings()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                    取消
+                </button>
+                <button onclick="saveApiSettings()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                    保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/advanced.js"></script>
+</body>
+</html>

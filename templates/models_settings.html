@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多模型配置 - 视频转文字工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-6 max-w-6xl">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center">
+                <h1 class="text-3xl font-bold text-gray-800">
+                    <i class="fas fa-cogs mr-3 text-indigo-600"></i>多模型配置管理
+                </h1>
+                <a href="/" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors">
+                    <i class="fas fa-arrow-left mr-2"></i>返回主页
+                </a>
+            </div>
+            <p class="text-gray-600 mt-2">配置多个 AI 模型，快速切换使用</p>
+        </div>
+
+        <!-- Model Selector -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <label class="text-lg font-semibold text-gray-800">
+                    <i class="fas fa-list mr-2 text-indigo-600"></i>选择模型配置
+                </label>
+                <button onclick="showAddModelModal()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
+                    <i class="fas fa-plus mr-2"></i>添加新模型
+                </button>
+            </div>
+            
+            <select id="modelSelector" onchange="loadModelConfig()" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                <option value="">-- 请选择模型 --</option>
+            </select>
+        </div>
+
+        <!-- Model Configuration Form -->
+        <div id="configForm" class="bg-white rounded-2xl shadow-xl p-8 hidden">
+            <form id="modelForm" class="space-y-6">
+                <!-- Model Alias -->
+                <div>
+                    <label for="modelAlias" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-tag mr-2 text-indigo-600"></i>模型别名
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="modelAlias" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        placeholder="例如：星火Claude、OpenAI官方"
+                        required
+                        readonly
+                    >
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>用于识别此配置的名称
+                    </p>
+                </div>
+
+                <!-- API Key -->
+                <div>
+                    <label for="apiKey" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-key mr-2 text-indigo-600"></i>API Key
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="apiKey" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        placeholder="sk-..."
+                        required
+                    >
+                </div>
+
+                <!-- Base URL -->
+                <div>
+                    <label for="baseUrl" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-link mr-2 text-indigo-600"></i>Base URL
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="url" 
+                        id="baseUrl" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        placeholder="https://api.openai.com/v1"
+                        required
+                    >
+                </div>
+
+                <!-- Model Provider -->
+                <div>
+                    <label for="modelProvider" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-server mr-2 text-indigo-600"></i>Model Provider
+                    </label>
+                    <select 
+                        id="modelProvider" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                        <option value="openai">OpenAI</option>
+                        <option value="openai-completion">OpenAI Completion</option>
+                        <option value="azure">Azure OpenAI</option>
+                        <option value="anthropic">Anthropic (Claude)</option>
+                        <option value="qwen">通义千问</option>
+                        <option value="zhipu">智谱 AI</option>
+                        <option value="custom">自定义</option>
+                    </select>
+                </div>
+
+                <!-- Model Name -->
+                <div>
+                    <label for="modelName" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-robot mr-2 text-indigo-600"></i>模型名称
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                        type="text" 
+                        id="modelName" 
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        placeholder="gpt-4o"
+                        required
+                    >
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle mr-1"></i>例如：gpt-4o, claude-4-sonnet-thinking 等
+                    </p>
+                </div>
+
+                <!-- Custom Prompt -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <label for="customPrompt" class="text-sm font-semibold text-gray-700">
+                            <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>自定义提示词
+                            <span class="text-gray-500 text-xs font-normal ml-2">(可选)</span>
+                        </label>
+                        <button 
+                            type="button" 
+                            onclick="useDefaultPrompt()" 
+                            class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                        >
+                            <i class="fas fa-undo mr-1"></i>使用默认提示词
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-600 mb-2">
+                        <i class="fas fa-info-circle mr-1"></i>使用 <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">{transcript}</code> 作为占位符
+                    </p>
+                    <textarea 
+                        id="customPrompt" 
+                        rows="8"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm"
+                        placeholder="留空则使用默认提示词..."
+                    ></textarea>
+                    <p class="text-xs text-gray-500 mt-1">
+                        为此模型设置专属的提示词，留空则使用系统默认提示词
+                    </p>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex space-x-4 pt-4">
+                    <button 
+                        type="button" 
+                        onclick="testConnection()" 
+                        class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors"
+                        id="testBtn"
+                    >
+                        <i class="fas fa-plug mr-2"></i>测试连接
+                    </button>
+                    <button 
+                        type="submit" 
+                        class="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors"
+                    >
+                        <i class="fas fa-save mr-2"></i>保存配置
+                    </button>
+                    <button 
+                        type="button" 
+                        onclick="deleteModel()" 
+                        class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
+                    >
+                        <i class="fas fa-trash mr-2"></i>删除
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Status Message -->
+        <div id="statusMessage" class="mt-6 hidden">
+            <div class="p-4 rounded border-l-4">
+                <p id="statusText"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Model Modal -->
+    <div id="addModelModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-plus-circle mr-2 text-green-600"></i>添加新模型
+            </h3>
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">模型别名</label>
+                <input 
+                    type="text" 
+                    id="newModelAlias" 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="例如：星火Claude"
+                >
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button onclick="hideAddModelModal()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                    取消
+                </button>
+                <button onclick="addNewModel()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    添加
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentModels = [];
+
+        // 页面加载时获取所有模型
+        window.addEventListener('DOMContentLoaded', async () => {
+            await loadModelsList();
+        });
+
+        // 加载模型列表
+        async function loadModelsList() {
+            try {
+                const response = await fetch('/api/models/list');
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentModels = data.models;
+                    const selector = document.getElementById('modelSelector');
+                    selector.innerHTML = '<option value="">-- 请选择模型 --</option>';
+                    
+                    data.models.forEach(model => {
+                        const option = document.createElement('option');
+                        option.value = model.alias;
+                        option.textContent = `${model.alias} - ${model.model_name}`;
+                        if (model.alias === data.active_model) {
+                            option.textContent += ' (当前使用)';
+                            option.selected = true;
+                        }
+                        selector.appendChild(option);
+                    });
+                    
+                    // 如果有活动模型，自动加载
+                    if (data.active_model) {
+                        loadModelConfig();
+                    }
+                }
+            } catch (error) {
+                console.error('加载模型列表失败:', error);
+            }
+        }
+
+        // 加载选中模型的配置
+        function loadModelConfig() {
+            const alias = document.getElementById('modelSelector').value;
+            if (!alias) {
+                document.getElementById('configForm').classList.add('hidden');
+                return;
+            }
+            
+            const model = currentModels.find(m => m.alias === alias);
+            if (model) {
+                document.getElementById('modelAlias').value = model.alias;
+                document.getElementById('apiKey').value = model.api_key;
+                document.getElementById('baseUrl').value = model.base_url;
+                document.getElementById('modelProvider').value = model.model_provider;
+                document.getElementById('modelName').value = model.model_name;
+                document.getElementById('customPrompt').value = model.custom_prompt || '';
+                document.getElementById('configForm').classList.remove('hidden');
+            }
+        }
+
+        // 默认提示词
+        const DEFAULT_PROMPT = `请你扮演一名"课程笔记精简&排版编辑"，对我提供的 Markdown 课程文档进行重排、精简和结构优化。要求如下：
+
+## 文档信息
+标题：{title}
+
+## 整体风格
+- 保留所有核心观点和方法论，删除或压缩废话、营销语、重复说明
+- 风格偏向知识笔记/复习大纲，而不是长篇教程文案
+- 语言简洁、直接，句子能短就短
+
+转录文本：
+{transcript}
+
+请开始整理：`;
+
+        // 使用默认提示词
+        function useDefaultPrompt() {
+            document.getElementById('customPrompt').value = DEFAULT_PROMPT;
+            showStatus('已设置为默认提示词', 'success');
+        }
+
+        // 保存模型配置
+        document.getElementById('modelForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = {
+                alias: document.getElementById('modelAlias').value,
+                api_key: document.getElementById('apiKey').value,
+                base_url: document.getElementById('baseUrl').value,
+                model_provider: document.getElementById('modelProvider').value,
+                model_name: document.getElementById('modelName').value,
+                custom_prompt: document.getElementById('customPrompt').value
+            };
+            
+            try {
+                const response = await fetch('/api/models/update', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('配置保存成功！', 'success');
+                    await loadModelsList();
+                } else {
+                    showStatus('保存失败: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('保存失败: ' + error.message, 'error');
+            }
+        });
+
+        // 显示添加模型对话框
+        function showAddModelModal() {
+            document.getElementById('addModelModal').classList.remove('hidden');
+            document.getElementById('newModelAlias').value = '';
+        }
+
+        // 隐藏添加模型对话框
+        function hideAddModelModal() {
+            document.getElementById('addModelModal').classList.add('hidden');
+        }
+
+        // 添加新模型
+        async function addNewModel() {
+            const alias = document.getElementById('newModelAlias').value.trim();
+            if (!alias) {
+                alert('请输入模型别名');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/models/add', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        alias: alias,
+                        api_key: '',
+                        base_url: 'https://api.openai.com/v1',
+                        model_provider: 'openai',
+                        model_name: 'gpt-4o'
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    hideAddModelModal();
+                    await loadModelsList();
+                    document.getElementById('modelSelector').value = alias;
+                    loadModelConfig();
+                    showStatus('模型添加成功！请填写配置信息', 'success');
+                } else {
+                    alert('添加失败: ' + result.error);
+                }
+            } catch (error) {
+                alert('添加失败: ' + error.message);
+            }
+        }
+
+        // 测试连接
+        async function testConnection() {
+            const testBtn = document.getElementById('testBtn');
+            const originalText = testBtn.innerHTML;
+            
+            testBtn.disabled = true;
+            testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>测试中...';
+            
+            try {
+                const formData = {
+                    api_key: document.getElementById('apiKey').value,
+                    base_url: document.getElementById('baseUrl').value,
+                    model_name: document.getElementById('modelName').value
+                };
+                
+                const response = await fetch('/api/models/test_connection', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('✓ 连接测试成功！API 配置正常。', 'success');
+                } else {
+                    showStatus('✗ ' + result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('✗ 连接测试失败: ' + error.message, 'error');
+            } finally {
+                testBtn.disabled = false;
+                testBtn.innerHTML = originalText;
+            }
+        }
+
+        // 删除模型
+        async function deleteModel() {
+            const alias = document.getElementById('modelAlias').value;
+            if (!confirm(`确定要删除模型配置"${alias}"吗？`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/models/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({alias: alias})
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showStatus('模型删除成功！', 'success');
+                    document.getElementById('configForm').classList.add('hidden');
+                    await loadModelsList();
+                } else {
+                    showStatus('删除失败: ' + result.error, 'error');
+                }
+            } catch (error) {
+                showStatus('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        // 显示状态消息
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusMessage');
+            const statusText = document.getElementById('statusText');
+            const statusContainer = statusDiv.querySelector('div');
+            
+            statusText.textContent = message;
+            statusDiv.classList.remove('hidden');
+            
+            statusContainer.className = 'p-4 rounded border-l-4';
+            if (type === 'success') {
+                statusContainer.classList.add('bg-green-100', 'border-green-500', 'text-green-700');
+            } else if (type === 'error') {
+                statusContainer.classList.add('bg-red-100', 'border-red-500', 'text-red-700');
+            } else {
+                statusContainer.classList.add('bg-blue-100', 'border-blue-500', 'text-blue-700');
+            }
+            
+            setTimeout(() => {
+                statusDiv.classList.add('hidden');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

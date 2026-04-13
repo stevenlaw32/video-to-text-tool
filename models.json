@@ -1,0 +1,100 @@
+{
+  "models": [
+    {
+      "alias": "星火",
+      "api_key": "sk-2nN0mDVNsLbDLLPcPNd64v1TlHiXbHNUYrupejrY9FBkjVfC",
+      "base_url": "https://xh.v1api.cc/v1",
+      "model_provider": "openai",
+      "model_name": "claude-4-sonnet-thinking",
+      "custom_prompt": "请你扮演一名\"课程笔记精简&排版编辑\"，对我提供的 Markdown 课程文档进行重排、精简和结构优化。要求如下：\n\n## 文档信息\n标题：{title}\n\n## 整体风格\n- 保留所有核心观点和方法论，删除或压缩废话、营销语、重复说明\n- 风格偏向知识笔记/复习大纲，而不是长篇教程文案\n- 语言简洁、直接，句子能短就短\n\n转录文本：\n{transcript}\n\n请开始整理："
+    },
+    {
+      "alias": "dsafs d",
+      "api_key": "wq e ",
+      "base_url": "https://api.openai.com/v1",
+      "model_provider": "openai",
+      "model_name": "claude"
+    },
+    {
+      "alias": "claude",
+      "api_key": "sk-xPfpPY0tif1QIoOnWKU8g0SkClNWv9Al1VT2ljAhpDB8l1xj",
+      "base_url": "http://1.95.142.151:3000/v1",
+      "model_provider": "openai-completion",
+      "model_name": "claude-3-5-sonnet-20241022",
+      "custom_prompt": ""
+    },
+    {
+      "alias": "claude-thinking",
+      "api_key": "sk-2nN0mDVNsLbDLLPcPNd64v1TlHiXbHNUYrupejrY9FBkjVfC",
+      "base_url": "https://xh.v1api.cc/v1",
+      "model_provider": "openai-completion",
+      "model_name": "claude-4-sonnet-thinking",
+      "custom_prompt": ""
+    },
+    {
+      "alias": "claude-haiku",
+      "api_key": "sk-aUC4XQ2lwZW82Y6qOR2mS6l5v7f7lCh88NZK0pNHNj9FUoCq",
+      "base_url": "https://millionengine.com/v1",
+      "model_provider": "openai-completion",
+      "model_name": "claude-haiku-4-5-20251001",
+      "custom_prompt": ""
+    },
+    {
+      "alias": "qingyun",
+      "api_key": "sk-OqWvpgQAJcG778jwKgtPxqbqmmOtX0RUNYbIkUzAlzJhr2kd",
+      "base_url": "https://api.qingyuntop.top/v1",
+      "model_provider": "openai-completion",
+      "model_name": "gpt-4o",
+      "custom_prompt": ""
+    },
+    {
+      "alias": "qwen3.5-plus",
+      "api_key": "sk-KUDWgFhuYBlkY8UtRhi3slvFanXWwlneeihLIYH6qAJv1Ybw",
+      "base_url": "https://api.newcoin.top",
+      "model_provider": "openai-completion",
+      "model_name": "qwen3.5-plus",
+      "custom_prompt": ""
+    },
+    {
+      "alias": "minimax-m2.1",
+      "api_key": "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",
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "model_provider": "openai-completion",
+      "model_name": "minimaxai/minimax-m2.1",
+      "custom_prompt": ""
+    },
+    {
+      "alias": "minimax-m2.5",
+      "api_key": "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",
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "model_provider": "openai-completion",
+      "model_name": "minimaxai/minimax-m2.5",
+      "custom_prompt": ""
+    },
+    {
+      "alias": "glm-5",
+      "api_key": "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",
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "model_provider": "openai-completion",
+      "model_name": "zhipuai/glm-5-plus",
+      "custom_prompt": ""
+    },
+    {
+      "alias": "nvidia-free",
+      "api_key": "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",
+      "base_url": "https://integrate.api.nvidia.com/v1",
+      "model_provider": "openai-completion",
+      "model_name": "nvidia/llama-3.1-nemotron-70b-instruct",
+      "custom_prompt": ""
+    },
+    {
+      "alias": "doubao-lite",
+      "api_key": "1726540d-5585-465f-8ff4-cdbdf8f06479",
+      "base_url": "https://ark.cn-beijing.volces.com/api/v3",
+      "model_provider": "openai-completion",
+      "model_name": "doubao-1-5-lite-32k-250115",
+      "custom_prompt": ""
+    }
+  ],
+  "active_model": "星火"
+}
