@@ -7,6 +7,72 @@
 
 ---
 
+## [1.0.1] - 2026-04-14
+
+### 🐛 修复
+
+- **OpenMP 库冲突**：在启动脚本中添加 `KMP_DUPLICATE_LIB_OK=TRUE` 环境变量
+  - 修复了 macOS 上多个库包含 OpenMP 运行时导致的冲突
+  - 影响文件：`启动服务.sh`, `启动服务（带日志窗口）.command`
+
+- **Faster-Whisper 兼容性问题**：回退到稳定的 openai-whisper
+  - faster-whisper 在某些 macOS 系统上出现段错误（segmentation fault）
+  - 为保证稳定性，继续使用 openai-whisper
+  - 虽然速度较慢，但可靠性更高
+
+### ✨ 新增
+
+- **离线安装包**：创建 `offline_packages/` 目录
+  - 包含所有 Python 依赖包（44个，约 220 MB）
+  - 包含 Whisper base 模型（139 MB）
+  - 总大小约 360 MB
+  - 支持完全离线安装和部署
+
+- **离线安装文档**：
+  - `离线安装指南.md` - 详细的离线安装步骤和故障排除
+  - `offline_packages/使用说明.txt` - 快速使用说明
+
+- **Faster-Whisper 升级文档**：
+  - `FASTER_WHISPER_升级说明.md` - 记录了升级尝试过程
+  - 包含性能对比、技术细节和已知问题
+  - 为未来的优化提供参考
+
+### 📝 文档
+
+- **查看详细日志说明**：`查看详细日志说明.md`
+  - 3种查看 Whisper 详细转录日志的方法
+  - 终端日志和网页日志的区别说明
+  - 故障排除指南
+
+### 🔧 改进
+
+- **.gitignore 优化**：
+  - 允许 `离线安装指南.md`
+  - 允许 `offline_packages/` 下的文档文件
+  - 允许 `FASTER_WHISPER_升级说明.md`
+
+### 📦 依赖
+
+- 保持使用 `openai-whisper` (稳定版本)
+- 所有依赖已打包到 `offline_packages/`
+
+### ⚠️ 已知问题
+
+- **MPS 不兼容**：Apple Silicon 的 MPS 后端与 Whisper 部分操作不兼容，已自动降级到 CPU
+- **Faster-Whisper 段错误**：在某些 macOS 系统上会崩溃，暂不推荐使用
+- **处理速度**：CPU 模式下，large 模型处理速度较慢，建议使用 base 或 small 模型
+
+### 🎯 性能
+
+**Whisper 模型性能**（10 分钟视频，CPU 模式）：
+- tiny: 2-3 分钟
+- base: 5-8 分钟（推荐）
+- small: 15-20 分钟
+- medium: 30-40 分钟
+- large: 60+ 分钟
+
+---
+
 ## [1.0.0] - 2026-04-14
 
 ### ✨ 新增功能

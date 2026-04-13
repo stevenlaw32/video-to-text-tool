@@ -8,7 +8,7 @@ cd "$DIR"
 osascript <<EOF
 tell application "Terminal"
     activate
-    do script "cd '$DIR' && source venv/bin/activate && python3 app_advanced.py"
+    do script "cd '$DIR' && export KMP_DUPLICATE_LIB_OK=TRUE && source venv/bin/activate && python3 app_advanced.py"
 end tell
 EOF
 

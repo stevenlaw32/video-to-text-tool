@@ -19,7 +19,11 @@ uploads/
 !使用说明-增强版.md
 !查看详细日志说明.md
 !CHANGELOG.md
+!FASTER_WHISPER_升级说明.md
+!离线安装指南.md
 !requirements.txt
+!offline_packages/**/*.md
+!offline_packages/**/*.txt
 .DS_Store
 venv/
 env/
