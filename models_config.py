@@ -143,6 +143,57 @@ class ModelsConfig:
         
         return self._save_config()
     
+    def rename_model(self, old_alias: str, new_alias: str,
+                     api_key: Optional[str] = None,
+                     base_url: Optional[str] = None,
+                     model_provider: Optional[str] = None,
+                     model_name: Optional[str] = None,
+                     custom_prompt: Optional[str] = None) -> bool:
+        """
+        重命名模型并更新配置
+        
+        Args:
+            old_alias: 原始别名
+            new_alias: 新别名
+            api_key: API密钥（可选）
+            base_url: API基础URL（可选）
+            model_provider: 模型提供商（可选）
+            model_name: 模型名称（可选）
+            custom_prompt: 自定义提示词（可选）
+            
+        Returns:
+            是否重命名成功
+        """
+        # 检查原始模型是否存在
+        old_model = self.get_model_by_alias(old_alias)
+        if not old_model:
+            return False
+        
+        # 检查新别名是否已被使用（除非新旧别名相同）
+        if old_alias != new_alias and self.get_model_by_alias(new_alias):
+            return False
+        
+        # 更新别名
+        old_model["alias"] = new_alias
+        
+        # 更新其他字段
+        if api_key is not None:
+            old_model["api_key"] = api_key
+        if base_url is not None:
+            old_model["base_url"] = base_url
+        if model_provider is not None:
+            old_model["model_provider"] = model_provider
+        if model_name is not None:
+            old_model["model_name"] = model_name
+        if custom_prompt is not None:
+            old_model["custom_prompt"] = custom_prompt
+        
+        # 如果重命名的是活动模型，也要更新活动模型的别名
+        if self.config.get("active_model") == old_alias:
+            self.config["active_model"] = new_alias
+        
+        return self._save_config()
+    
     def delete_model(self, alias: str) -> bool:
         """
         删除模型配置

@@ -29,27 +29,51 @@
     <div class="container mx-auto px-4 py-6 max-w-7xl">
         <!-- Header -->
         <div class="mb-6">
-            <div class="flex justify-between items-center mb-4">
-                <div class="flex-1"></div>
-                <div class="text-center flex-1">
-                    <h1 class="text-4xl font-bold text-gray-800 mb-2">
-                        <i class="fas fa-video mr-3 text-indigo-600"></i>视频转文字工具
+            <div class="flex justify-between items-center">
+                <!-- 左侧：标题 -->
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-video mr-3 text-indigo-600"></i>
+                        <span>视频转文字工具</span>
                     </h1>
-                    <p class="text-gray-600">批量处理 · 自定义顺序 · AI智能摘要</p>
-                    <p class="text-xs text-gray-400 mt-1">v1.0.1</p>
+                    <p class="text-sm text-gray-600 mt-1 ml-12">批量处理 · 自定义顺序 · AI智能摘要</p>
                 </div>
-                <div class="flex-1 flex justify-end space-x-2">
-                    <a href="/models" id="modelsLink" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center">
-                        <i class="fas fa-layer-group mr-2"></i>多模型配置
+                
+                <!-- 右侧：功能按钮 -->
+                <div class="flex items-center space-x-2">
+                    <a href="/ocr" class="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors flex items-center text-sm">
+                        <i class="fas fa-eye mr-1.5"></i>OCR 配置
                     </a>
-                    <a href="/settings" id="settingsLink" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center">
-                        <i class="fas fa-cog mr-2"></i>API 设置
+                    <a href="/models" id="modelsLink" class="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center text-sm">
+                        <i class="fas fa-layer-group mr-1.5"></i>多模型
                     </a>
+                    <a href="/settings" id="settingsLink" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center text-sm">
+                        <i class="fas fa-cog mr-1.5"></i>API 设置
+                    </a>
+                    <button onclick="shutdownServer()" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center text-sm">
+                        <i class="fas fa-power-off mr-1.5"></i>停止服务
+                    </button>
                 </div>
             </div>
         </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Tab Navigation -->
+        <div class="bg-white rounded-2xl shadow-xl mb-6">
+            <div class="flex border-b">
+                <button onclick="switchTab('video')" id="videoTab" class="flex-1 px-6 py-4 text-center font-semibold transition-colors border-b-2 border-indigo-600 text-indigo-600">
+                    <i class="fas fa-video mr-2"></i>批量上传视频
+                </button>
+                <button onclick="switchTab('audio')" id="audioTab" class="flex-1 px-6 py-4 text-center font-semibold transition-colors border-b-2 border-transparent text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-music mr-2"></i>音频提取
+                </button>
+                <button onclick="switchTab('link')" id="linkTab" class="flex-1 px-6 py-4 text-center font-semibold transition-colors border-b-2 border-transparent text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-link mr-2"></i>视频链接解析
+                </button>
+            </div>
+        </div>
+
+        <!-- Video Tab Content -->
+        <div id="videoTabContent" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Left Panel: Upload & Video List -->
             <div class="lg:col-span-2 space-y-6">
                 <!-- Upload Area -->
@@ -96,31 +120,67 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                Whisper模型
+                                处理模式
                             </label>
-                            <select id="modelSize" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                                <option value="tiny">Tiny - 最快 (39M, 速度快但准确度较低)</option>
-                                <option value="base" selected>Base - 推荐 (74M, 速度与准确度平衡)</option>
-                                <option value="small">Small - 较准确 (244M, 速度中等)</option>
-                                <option value="medium">Medium - 很准确 (769M, 速度较慢)</option>
-                                <option value="large">Large - 最准确 (1550M, 速度很慢)</option>
+                            <select id="processingMode" onchange="toggleProcessingMode()" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                <option value="auto" selected>自动检测 - 智能选择 Whisper 或 OCR</option>
+                                <option value="whisper">Whisper - 音频转录（有声视频）</option>
+                                <option value="ocr">OCR - 画面文字提取（无声视频）</option>
                             </select>
                             <p class="text-xs text-gray-500 mt-1">
                                 <i class="fas fa-info-circle mr-1"></i>
-                                <span class="font-semibold">配置较低？</span>建议使用 Tiny 或 Base 模型以提升速度
+                                <span class="font-semibold">自动模式：</span>先尝试 Whisper，如果无音频则自动切换 OCR
                             </p>
                         </div>
 
-                        <div>
-                            <label class="block text-sm font-semibold text-gray-700 mb-2">
-                                识别语言
-                            </label>
-                            <select id="whisperLanguage" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                                <option value="zh" selected>中文</option>
-                                <option value="en">English</option>
-                                <option value="ja">日本語</option>
-                                <option value="ko">한국어</option>
-                            </select>
+                        <div id="whisperSettings">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    Whisper模型
+                                </label>
+                                <select id="modelSize" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                    <option value="tiny">Tiny - 最快 (39M, 速度快但准确度较低)</option>
+                                    <option value="base" selected>Base - 推荐 (74M, 速度与准确度平衡)</option>
+                                    <option value="small">Small - 较准确 (244M, 速度中等)</option>
+                                    <option value="medium">Medium - 很准确 (769M, 速度较慢)</option>
+                                    <option value="large">Large - 最准确 (1550M, 速度很慢)</option>
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <span class="font-semibold">配置较低？</span>建议使用 Tiny 或 Base 模型以提升速度
+                                </p>
+                            </div>
+
+                            <div class="mt-4">
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    识别语言
+                                </label>
+                                <select id="whisperLanguage" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                    <option value="zh" selected>中文</option>
+                                    <option value="en">English</option>
+                                    <option value="ja">日本語</option>
+                                    <option value="ko">한국어</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="ocrSettings" class="hidden">
+                            <div class="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                                <div class="flex items-start">
+                                    <i class="fas fa-eye text-orange-600 text-xl mr-3 mt-1"></i>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-semibold text-orange-800 mb-2">OCR 模式说明</p>
+                                        <ul class="text-xs text-orange-700 space-y-1">
+                                            <li>• 适用于无声视频、文字卡片、PPT 录屏等</li>
+                                            <li>• 使用云端 OCR API（需要先配置）</li>
+                                            <li>• 支持百度/腾讯/阿里云 OCR</li>
+                                        </ul>
+                                        <a href="/ocr" target="_blank" class="inline-block mt-2 text-xs text-orange-600 hover:text-orange-800 font-semibold">
+                                            <i class="fas fa-cog mr-1"></i>配置 OCR API →
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div>
@@ -146,16 +206,6 @@
                                     <option value="qwen-turbo">qwen-turbo</option>
                                     <option value="qwen-plus">qwen-plus</option>
                                 </select>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    <i class="fas fa-info-circle mr-1"></i>从API设置中配置的模型自动加载
-                                </p>
-                            </div>
-
-                            <div>
-                                <p class="text-xs text-gray-500">
-                                    <i class="fas fa-info-circle mr-1"></i>自定义提示词请在 
-                                    <a href="/settings" class="text-indigo-600 hover:text-indigo-800 font-medium">API 设置</a> 中配置
-                                </p>
                             </div>
                         </div>
                     </div>
@@ -163,16 +213,196 @@
                     <button onclick="startProcessing()" id="processBtn" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
                         <i class="fas fa-play mr-2"></i>开始处理
                     </button>
+
+                    <!-- API Settings Buttons -->
+                    <div class="grid grid-cols-2 gap-3 mt-4">
+                        <button onclick="toggleApiSettings()" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium py-2 px-4 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors">
+                            <i class="fas fa-cog mr-1"></i>配置API密钥
+                        </button>
+                        <button id="testConnectionBtn" onclick="testApiConnection()" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium py-2 px-4 border border-indigo-300 rounded-lg hover:bg-indigo-50 transition-colors">
+                            <i class="fas fa-plug mr-1"></i>连通性测试
+                        </button>
+                    </div>
+
+                    <!-- Connection Test Result -->
+                    <div id="connectionTestResult" class="hidden mt-4">
+                        <div class="p-4 rounded-lg border-l-4 flex items-center justify-between">
+                            <div class="flex items-center flex-1">
+                                <i id="testResultIcon" class="fas mr-3 text-xl"></i>
+                                <p id="testResultText" class="font-medium text-sm"></p>
+                            </div>
+                            <button onclick="hideTestResult()" class="ml-4 text-gray-500 hover:text-gray-700">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audio Tab Content -->
+        <div id="audioTabContent" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Panel: Upload & Settings -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- File Upload Area -->
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-upload mr-2 text-indigo-600"></i>选择视频文件
+                        </h2>
+                        
+                        <div id="audioDropZone" class="border-2 border-dashed border-gray-300 rounded-xl p-12 text-center cursor-pointer hover:border-indigo-500 transition-colors">
+                            <i class="fas fa-cloud-upload-alt text-6xl text-gray-400 mb-4"></i>
+                            <p class="text-lg font-medium text-gray-700 mb-2">拖拽文件到这里或点击选择</p>
+                            <p class="text-sm text-gray-500">支持格式: MP4, AVI, MOV, MKV, FLV, WMV, M4V, WEBM</p>
+                            <input type="file" id="audioFileInput" class="hidden" accept="video/*" multiple>
+                        </div>
+                    </div>
+
+                    <!-- Settings -->
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-sliders-h mr-2 text-indigo-600"></i>提取设置
+                        </h2>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-file-audio mr-1"></i>输出格式
+                                </label>
+                                <select id="outputFormat" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="mp3" selected>MP3</option>
+                                    <option value="wav">WAV</option>
+                                    <option value="aac">AAC</option>
+                                    <option value="flac">FLAC</option>
+                                    <option value="ogg">OGG</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-signal mr-1"></i>音质
+                                </label>
+                                <select id="bitrate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="128k">128 kbps (标准)</option>
+                                    <option value="192k" selected>192 kbps (高质量)</option>
+                                    <option value="256k">256 kbps (极高质量)</option>
+                                    <option value="320k">320 kbps (无损级)</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    <i class="fas fa-wave-square mr-1"></i>采样率
+                                </label>
+                                <select id="sampleRate" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="44100" selected>44.1 kHz (CD质量)</option>
+                                    <option value="48000">48 kHz (专业级)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- File List -->
+                    <div class="bg-white rounded-2xl shadow-xl p-8">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold text-gray-800">
+                                <i class="fas fa-list mr-2 text-indigo-600"></i>处理队列
+                                <span id="audioFileCount" class="text-sm text-gray-500 ml-2">(0 个文件)</span>
+                            </h2>
+                            <button onclick="clearAllAudioFiles()" class="text-red-600 hover:text-red-800 text-sm font-medium">
+                                <i class="fas fa-trash mr-1"></i>清空列表
+                            </button>
+                        </div>
+                        
+                        <div id="audioFileList" class="space-y-3 max-h-96 overflow-y-auto">
+                            <div class="text-center py-8 text-gray-400">
+                                <i class="fas fa-inbox text-4xl mb-2"></i>
+                                <p class="text-sm">暂无文件，请上传视频</p>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 flex gap-3">
+                            <button onclick="startAudioExtraction()" id="extractBtn" class="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+                                <i class="fas fa-play mr-2"></i>开始提取
+                            </button>
+                            <button onclick="downloadAllAudio()" id="downloadAllBtn" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                                <i class="fas fa-download mr-2"></i>批量下载
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- API Settings -->
-                <div class="bg-white rounded-2xl shadow-xl p-6">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4">
-                        <i class="fas fa-key mr-2 text-indigo-600"></i>API设置
-                    </h2>
-                    <button onclick="toggleApiSettings()" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
-                        <i class="fas fa-cog mr-1"></i>配置API密钥
-                    </button>
+                <!-- Right Panel: Output Files -->
+                <div class="space-y-6">
+                    <!-- Statistics -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-chart-bar mr-2 text-indigo-600"></i>统计信息
+                        </h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">总文件数</span>
+                                <span id="statTotal" class="text-lg font-bold text-gray-800">0</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">已完成</span>
+                                <span id="statCompleted" class="text-lg font-bold text-green-600">0</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">处理中</span>
+                                <span id="statProcessing" class="text-lg font-bold text-blue-600">0</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">失败</span>
+                                <span id="statFailed" class="text-lg font-bold text-red-600">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Output Files -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-folder-open mr-2 text-indigo-600"></i>输出文件
+                        </h3>
+                        <div id="outputFilesList" class="space-y-2 max-h-96 overflow-y-auto">
+                            <p class="text-sm text-gray-400 text-center py-4">暂无输出文件</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Link Tab Content -->
+        <div id="linkTabContent" class="hidden">
+            <div class="bg-white rounded-2xl shadow-xl p-8">
+                <div class="text-center py-16">
+                    <i class="fas fa-link text-6xl text-gray-300 mb-6"></i>
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-3">视频链接解析</h2>
+                    <p class="text-gray-500 mb-6">此功能正在开发中，敬请期待...</p>
+                    <div class="max-w-2xl mx-auto text-left bg-gray-50 rounded-lg p-6">
+                        <h3 class="text-sm font-semibold text-gray-700 mb-3">
+                            <i class="fas fa-info-circle mr-2 text-indigo-600"></i>计划支持的功能：
+                        </h3>
+                        <ul class="space-y-2 text-sm text-gray-600">
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
+                                <span>支持主流视频平台链接解析（YouTube、B站、抖音等）</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
+                                <span>自动下载视频并进行转录</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
+                                <span>批量链接处理</span>
+                            </li>
+                            <li class="flex items-start">
+                                <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
+                                <span>支持播放列表解析</span>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </div>

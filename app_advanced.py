@@ -3,6 +3,13 @@ import os
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from video_transcriber import VideoTranscriber
+try:
+    from simple_ocr import SimpleOCR
+    HAS_VIDEO_OCR = True
+    print("✓ 使用简化版 OCR（云端 API）")
+except ImportError:
+    HAS_VIDEO_OCR = False
+    print("⚠️  OCR 模块未安装，OCR 功能将不可用")
 from ai_summarizer_v2 import AISummarizerV2
 import tempfile
 import json
@@ -11,6 +18,8 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from api_routes import api_bp
 from models_routes import models_bp
+from audio_routes import audio_bp
+from ocr_routes import ocr_bp
 from models_config import ModelsConfig
 from log_stream import log_stream
 
@@ -19,6 +28,8 @@ load_dotenv()
 app = Flask(__name__)
 app.register_blueprint(api_bp)
 app.register_blueprint(models_bp)
+app.register_blueprint(audio_bp)
+app.register_blueprint(ocr_bp)
 app.config['MAX_CONTENT_LENGTH'] = 2000 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = Path(tempfile.gettempdir()) / 'video_uploads'
 app.config['UPLOAD_FOLDER'].mkdir(exist_ok=True)
@@ -51,6 +62,37 @@ def models_settings():
     return render_template('models_settings.html')
 
 
+@app.route('/audio')
+def audio_extract():
+    return render_template('audio_extract.html')
+
+
+@app.route('/ocr')
+def ocr_settings():
+    return render_template('ocr_settings.html')
+
+
+@app.route('/shutdown', methods=['POST'])
+def shutdown():
+    """停止服务器"""
+    print("\n" + "=" * 70)
+    print("🛑 收到停止服务器请求")
+    print("=" * 70)
+    
+    def shutdown_server():
+        import time
+        time.sleep(1)  # 等待响应发送完成
+        import os
+        import signal
+        os.kill(os.getpid(), signal.SIGTERM)
+    
+    # 在后台线程中停止服务器
+    import threading
+    threading.Thread(target=shutdown_server).start()
+    
+    return jsonify({'success': True, 'message': '服务器正在关闭...'})
+
+
 @app.route('/stream_logs')
 def stream_logs():
     """SSE 端点 - 实时推送处理日志到前端"""
@@ -66,6 +108,51 @@ def stream_logs():
             'X-Accel-Buffering': 'no'
         }
     )
+
+
+@app.route('/upload', methods=['POST'])
+def upload_single():
+    """单文件上传（用于音频提取）"""
+    if 'file' not in request.files:
+        return jsonify({'error': '没有上传文件'}), 400
+    
+    file = request.files['file']
+    
+    if file.filename == '':
+        return jsonify({'error': '文件名为空'}), 400
+    
+    if file and allowed_file(file.filename):
+        original_filename = file.filename
+        safe_filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        unique_filename = f"{timestamp}_{safe_filename}"
+        video_path = app.config['UPLOAD_FOLDER'] / unique_filename
+        file.save(video_path)
+        
+        return jsonify({
+            'success': True,
+            'file_path': str(video_path),
+            'filename': original_filename,
+            'size': video_path.stat().st_size
+        })
+    else:
+        return jsonify({'error': '不支持的文件格式'}), 400
+
+
+@app.route('/api/video_path/<file_id>')
+def get_video_path(file_id):
+    """获取已上传视频的文件路径"""
+    if file_id in uploaded_videos:
+        return jsonify({
+            'success': True,
+            'path': uploaded_videos[file_id]['path'],
+            'name': uploaded_videos[file_id]['original_name']
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'error': '文件不存在'
+        }), 404
 
 
 @app.route('/upload_batch', methods=['POST'])
@@ -111,6 +198,7 @@ def upload_batch():
 def process_batch():
     data = request.json
     video_ids = data.get('video_ids', [])
+    processing_mode = data.get('processing_mode', 'auto')  # auto, whisper, ocr
     model_size = data.get('model_size', 'base')
     whisper_language = data.get('whisper_language', 'zh')
     model_alias = data.get('model_alias', '')  # 模型别名
@@ -128,7 +216,9 @@ def process_batch():
         print("🚀 开始批量处理视频")
         print("=" * 70)
         log_stream.add_log("开始批量处理视频", "header")
+        mode_text = {'auto': '自动检测', 'whisper': 'Whisper 音频转录', 'ocr': 'OCR 画面文字'}
         print(f"📊 任务信息:")
+        print(f"   - 处理模式: {mode_text.get(processing_mode, processing_mode)}")
         print(f"   - 视频数量: {len(video_ids)} 个")
         print(f"   - Whisper 模型: {model_size}")
         print(f"   - 识别语言: {whisper_language}")
@@ -137,13 +227,18 @@ def process_batch():
         print("=" * 70 + "\n")
         
         log_stream.add_log(f"📊 任务信息:", "info")
+        log_stream.add_log(f"   处理模式: {mode_text.get(processing_mode, processing_mode)}", "info")
         log_stream.add_log(f"   视频数量: {len(video_ids)} 个", "info")
         log_stream.add_log(f"   Whisper 模型: {model_size}", "info")
         log_stream.add_log(f"   识别语言: {whisper_language}", "info")
         log_stream.add_log(f"   AI 模型: {model_alias}", "info")
         log_stream.add_log(f"   AI 摘要: {'启用' if enable_ai_summary else '禁用'}", "info")
         
-        transcriber = VideoTranscriber(model_size=model_size)
+        # 只在需要时初始化 Whisper
+        transcriber = None
+        if processing_mode != 'ocr':
+            transcriber = VideoTranscriber(model_size=model_size)
+        
         all_transcripts = []
         results = []
         
@@ -166,11 +261,79 @@ def process_batch():
             log_stream.add_log(f"文件名: {video_info['original_name']}", "info")
             log_stream.add_log(f"大小: {video_info['size'] / 1024 / 1024:.2f} MB", "info")
             
-            result = transcriber.process_video(video_path, language=whisper_language)
-            transcript = result['text']
+            # 根据处理模式选择处理方式
+            if processing_mode == 'ocr':
+                # 强制使用 OCR 模式
+                transcript = ""  # 跳过 Whisper，直接使用 OCR
+            else:
+                # Whisper 或 Auto 模式
+                result = transcriber.process_video(video_path, language=whisper_language)
+                transcript = result['text']
             
-            print(f"\n✓ 视频 [{i + 1}/{len(video_ids)}] 转录完成")
-            print(f"   转录文本长度: {len(transcript)} 字符\n")
+            # 检查是否需要使用 OCR
+            should_use_ocr = (
+                processing_mode == 'ocr' or  # 强制 OCR 模式
+                (processing_mode == 'auto' and (not transcript or len(transcript.strip()) == 0))  # 自动模式且转录为空
+            )
+            
+            if should_use_ocr:
+                print(f"\n⚠️  检测到音频转录结果为空")
+                print(f"   可能原因：视频无音频或音频为静音")
+                print(f"   正在尝试使用 OCR 提取画面文字...\n")
+                
+                log_stream.add_log("⚠️  音频转录结果为空", "warning")
+                log_stream.add_log("正在尝试 OCR 提取画面文字...", "info")
+                
+                try:
+                    # 检查 OCR 模块是否可用
+                    if not HAS_VIDEO_OCR:
+                        raise ImportError("OCR 模块未安装，请运行: pip install opencv-python pillow surya-ocr")
+                    
+                    from ocr_config import OCRConfig
+                    
+                    # 获取 OCR 配置
+                    ocr_config = OCRConfig()
+                    active_provider = ocr_config.get_active_provider()
+                    provider_config = ocr_config.get_provider_config(active_provider)
+                    
+                    print(f"   使用 OCR 引擎: {provider_config['name']}")
+                    log_stream.add_log(f"使用: {provider_config['name']}", "info")
+                    
+                    # 初始化 OCR（仅在需要时）
+                    if 'ocr_processor' not in locals():
+                        ocr_processor = SimpleOCR()
+                    
+                    # 检查是否配置了云端 OCR
+                    if active_provider not in ['baidu', 'tencent', 'aliyun']:
+                        raise ValueError(f"简化版 OCR 仅支持云端 API。请访问 /ocr 配置百度/腾讯/阿里云 OCR，并切换激活提供商。")
+                    
+                    # 使用云端 OCR
+                    ocr_result = ocr_processor.process_video(
+                        video_path,
+                        interval=1.0,
+                        cloud_provider=active_provider,
+                        cloud_config=provider_config
+                    )
+                    
+                    transcript = ocr_result['text']
+                    
+                    print(f"\n✓ OCR 提取完成")
+                    print(f"   提取文本长度: {len(transcript)} 字符")
+                    print(f"   处理帧数: {ocr_result['frame_count']}\n")
+                    
+                    log_stream.add_log(f"✓ OCR 提取完成", "success")
+                    log_stream.add_log(f"提取文本: {len(transcript)} 字符", "success")
+                    
+                except Exception as e:
+                    error_msg = f"OCR 提取失败: {str(e)}"
+                    print(f"❌ {error_msg}")
+                    log_stream.add_log(f"❌ {error_msg}", "error")
+                    log_stream.add_log("提示：检查 OCR 配置或安装依赖", "warning")
+                    # OCR 失败时保持空文本
+                    transcript = ""
+            
+            print(f"\n✓ 视频 [{i + 1}/{len(video_ids)}] 处理完成")
+            print(f"   文本长度: {len(transcript)} 字符\n")
             
             log_stream.add_log(f"✓ 视频 [{i + 1}/{len(video_ids)}] 处理完成", "success")
             
@@ -197,6 +360,16 @@ def process_batch():
             f"## {item['name']}\n\n{item['text']}" 
             for item in all_transcripts
         ])
+        
+        print(f"\n{'=' * 70}")
+        print(f"📝 合并转录结果")
+        print(f"{'=' * 70}")
+        print(f"   转录条目数: {len(all_transcripts)}")
+        print(f"   合并文本长度: {len(combined_transcript)} 字符")
+        print(f"{'=' * 70}\n")
+        
+        log_stream.add_log(f"📝 转录条目数: {len(all_transcripts)}", "info")
+        log_stream.add_log(f"📝 合并文本长度: {len(combined_transcript)} 字符", "info")
         
         ai_summary = None
         if enable_ai_summary and combined_transcript:

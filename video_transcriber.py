@@ -42,11 +42,20 @@ class VideoTranscriber:
         return device
     
     def extract_audio(self, video_path: str, output_path: Optional[str] = None) -> str:
+        try:
+            from log_stream import log_stream
+            has_log_stream = True
+        except:
+            has_log_stream = False
+            
         if output_path is None:
             temp_dir = tempfile.gettempdir()
             output_path = os.path.join(temp_dir, "temp_audio.wav")
         
         print(f"正在提取音频: {video_path}")
+        if has_log_stream:
+            log_stream.add_log(f"🎵 提取音频: {os.path.basename(video_path)}", "info")
+            
         try:
             # 使用 ffmpeg 提取音频
             (
@@ -56,10 +65,35 @@ class VideoTranscriber:
                 .overwrite_output()
                 .run(quiet=True, capture_stdout=True, capture_stderr=True)
             )
+            
+            # 检查音频文件大小
+            audio_size = os.path.getsize(output_path)
             print(f"音频已提取到: {output_path}")
+            print(f"音频文件大小: {audio_size / 1024:.2f} KB")
+            
+            if has_log_stream:
+                log_stream.add_log(f"✓ 音频提取完成 ({audio_size / 1024:.2f} KB)", "success")
+            
+            # 如果音频文件太小，可能没有有效音频
+            if audio_size < 1000:  # 小于 1KB
+                warning_msg = f"⚠️  警告：音频文件很小 ({audio_size} bytes)，视频可能没有音频轨道"
+                print(warning_msg)
+                if has_log_stream:
+                    log_stream.add_log(warning_msg, "warning")
+            
             return output_path
         except ffmpeg.Error as e:
-            raise Exception(f"音频提取失败: {e.stderr.decode() if e.stderr else str(e)}")
+            error_msg = f"音频提取失败: {e.stderr.decode() if e.stderr else str(e)}"
+            print(f"❌ {error_msg}")
+            if has_log_stream:
+                log_stream.add_log(f"❌ {error_msg}", "error")
+            raise Exception(error_msg)
+        except Exception as e:
+            error_msg = f"音频提取异常: {str(e)}"
+            print(f"❌ {error_msg}")
+            if has_log_stream:
+                log_stream.add_log(f"❌ {error_msg}", "error")
+            raise
     
     def transcribe(self, audio_path: str, language: str = "zh") -> dict:
         try:
@@ -114,17 +148,37 @@ class VideoTranscriber:
         return result
     
     def process_video(self, video_path: str, language: str = "zh") -> dict:
-        if not os.path.exists(video_path):
-            raise FileNotFoundError(f"视频文件不存在: {video_path}")
-        
-        audio_path = self.extract_audio(video_path)
-        
         try:
+            from log_stream import log_stream
+            has_log_stream = True
+        except:
+            has_log_stream = False
+            
+        if not os.path.exists(video_path):
+            error_msg = f"视频文件不存在: {video_path}"
+            print(f"❌ {error_msg}")
+            if has_log_stream:
+                log_stream.add_log(f"❌ {error_msg}", "error")
+            raise FileNotFoundError(error_msg)
+        
+        audio_path = None
+        try:
+            audio_path = self.extract_audio(video_path)
             result = self.transcribe(audio_path, language)
             return result
+        except Exception as e:
+            error_msg = f"视频处理失败: {str(e)}"
+            print(f"❌ {error_msg}")
+            if has_log_stream:
+                log_stream.add_log(f"❌ {error_msg}", "error")
+            raise
         finally:
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
+            if audio_path and os.path.exists(audio_path):
+                try:
+                    os.remove(audio_path)
+                    print(f"已清理临时音频文件: {audio_path}")
+                except Exception as e:
+                    print(f"⚠️  清理临时文件失败: {e}")
     
     def save_transcript(self, result: dict, output_path: str, format: str = "txt"):
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)

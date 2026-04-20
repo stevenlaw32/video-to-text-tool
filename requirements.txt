@@ -11,3 +11,6 @@ torch
 torchaudio
 ffmpeg-python
 numpy<2.0.0
+opencv-python
+surya-ocr
+pillow

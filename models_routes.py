@@ -58,19 +58,35 @@ def update_model():
         data = request.json
         config = ModelsConfig()
         
-        success = config.update_model(
-            alias=data.get('alias'),
-            api_key=data.get('api_key'),
-            base_url=data.get('base_url'),
-            model_provider=data.get('model_provider'),
-            model_name=data.get('model_name'),
-            custom_prompt=data.get('custom_prompt')
-        )
+        original_alias = data.get('original_alias')
+        new_alias = data.get('alias')
+        
+        # 如果别名被修改，需要重命名
+        if original_alias != new_alias:
+            success = config.rename_model(
+                old_alias=original_alias,
+                new_alias=new_alias,
+                api_key=data.get('api_key'),
+                base_url=data.get('base_url'),
+                model_provider=data.get('model_provider'),
+                model_name=data.get('model_name'),
+                custom_prompt=data.get('custom_prompt')
+            )
+        else:
+            # 别名未改变，直接更新
+            success = config.update_model(
+                alias=new_alias,
+                api_key=data.get('api_key'),
+                base_url=data.get('base_url'),
+                model_provider=data.get('model_provider'),
+                model_name=data.get('model_name'),
+                custom_prompt=data.get('custom_prompt')
+            )
         
         if success:
             return jsonify({'success': True, 'message': '模型更新成功'})
         else:
-            return jsonify({'success': False, 'error': '模型不存在'}), 404
+            return jsonify({'success': False, 'error': '模型不存在或新别名已被使用'}), 404
             
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

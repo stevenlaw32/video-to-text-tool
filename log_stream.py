@@ -40,8 +40,31 @@ class LogStream:
                 'type': log_type
             })
     
-    def get_logs(self, timeout=1):
-        """获取日志（生成器）"""
+    def get_logs(self, timeout=0.5, max_wait_time=300):
+        """获取日志（生成器）
+        
+        Args:
+            timeout: 队列获取超时时间（秒）
+            max_wait_time: 最大等待时间（秒），防止无限等待
+        """
+        import time
+        start_wait_time = time.time()
+        last_heartbeat = time.time()
+        
+        # 等待日志流激活或超时
+        while not self.active:
+            if time.time() - start_wait_time > max_wait_time:
+                # 超时退出
+                break
+            
+            # 每30秒发送一次心跳，防止SSE连接超时
+            if time.time() - last_heartbeat > 30:
+                yield {'message': '等待处理开始...', 'type': 'info'}
+                last_heartbeat = time.time()
+            
+            time.sleep(0.5)  # 短暂休眠，避免CPU空转
+            
+        # 开始获取日志
         while self.active or not self.log_queue.empty():
             try:
                 log = self.log_queue.get(timeout=timeout)
@@ -49,6 +72,10 @@ class LogStream:
             except queue.Empty:
                 if not self.active:
                     break
+                # 发送心跳保持连接
+                if time.time() - last_heartbeat > 30:
+                    yield {'message': '处理中...', 'type': 'info'}
+                    last_heartbeat = time.time()
                 continue
 
 # 全局日志流实例

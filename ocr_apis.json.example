@@ -1,0 +1,37 @@
+{
+  "active_provider": "surya",
+  "providers": {
+    "surya": {
+      "name": "Surya OCR (本地)",
+      "type": "local",
+      "enabled": true,
+      "description": "本地 OCR，无需 API，免费使用"
+    },
+    "baidu": {
+      "name": "百度 OCR",
+      "type": "cloud",
+      "enabled": false,
+      "api_key": "your-baidu-api-key",
+      "secret_key": "your-baidu-secret-key",
+      "description": "百度智能云 OCR，免费额度 500次/天"
+    },
+    "tencent": {
+      "name": "腾讯云 OCR",
+      "type": "cloud",
+      "enabled": false,
+      "secret_id": "your-tencent-secret-id",
+      "secret_key": "your-tencent-secret-key",
+      "region": "ap-guangzhou",
+      "description": "腾讯云 OCR，免费额度 1000次/月"
+    },
+    "aliyun": {
+      "name": "阿里云 OCR",
+      "type": "cloud",
+      "enabled": false,
+      "access_key_id": "your-aliyun-access-key-id",
+      "access_key_secret": "your-aliyun-access-key-secret",
+      "region": "cn-shanghai",
+      "description": "阿里云 OCR，按量付费"
+    }
+  }
+}

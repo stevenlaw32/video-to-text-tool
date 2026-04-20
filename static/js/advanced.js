@@ -4,6 +4,23 @@ let aiSummary = '';
 let folderName = '';
 let customPromptText = ''; // 从API配置中加载
 
+// 处理模式切换
+function toggleProcessingMode() {
+    const mode = document.getElementById('processingMode').value;
+    const whisperSettings = document.getElementById('whisperSettings');
+    const ocrSettings = document.getElementById('ocrSettings');
+    
+    if (mode === 'ocr') {
+        // OCR 模式：隐藏 Whisper 设置，显示 OCR 说明
+        whisperSettings.classList.add('hidden');
+        ocrSettings.classList.remove('hidden');
+    } else {
+        // Auto 或 Whisper 模式：显示 Whisper 设置，隐藏 OCR 说明
+        whisperSettings.classList.remove('hidden');
+        ocrSettings.classList.add('hidden');
+    }
+}
+
 // 默认提示词（仅用于后端，前端从API配置读取）
 const DEFAULT_PROMPT = `请你扮演一名"课程笔记精简&排版编辑"，对我提供的 Markdown 课程文档进行重排、精简和结构优化。要求如下：
 
@@ -384,6 +401,7 @@ async function startProcessing() {
     startTimer();
     
     const videoIds = uploadedFiles.map(f => f.id);
+    const processingMode = document.getElementById('processingMode').value;
     const modelSize = document.getElementById('modelSize').value;
     const whisperLanguage = document.getElementById('whisperLanguage').value;
     const modelAlias = document.getElementById('aiModel').value;
@@ -424,6 +442,7 @@ async function startProcessing() {
             },
             body: JSON.stringify({
                 video_ids: videoIds,
+                processing_mode: processingMode,
                 model_size: modelSize,
                 whisper_language: whisperLanguage,
                 model_alias: modelAlias,
@@ -762,12 +781,41 @@ function toggleApiSettings() {
 
 async function loadApiSettings() {
     try {
-        const response = await fetch('/api/get_config');
-        const data = await response.json();
+        // 获取当前选中的AI模型
+        const currentModel = document.getElementById('aiModel').value;
         
-        document.getElementById('apiKey').value = data.api_key || '';
-        document.getElementById('baseUrl').value = data.base_url || '';
-        document.getElementById('defaultModel').value = data.model_name || 'gpt-4o';
+        // 从多模型配置中查找该模型
+        const modelsResponse = await fetch('/api/models/list');
+        const modelsData = await modelsResponse.json();
+        
+        if (modelsData.success && modelsData.models) {
+            // 尝试找到匹配的模型配置（通过model_name匹配）
+            const matchedModel = modelsData.models.find(m => m.model_name === currentModel);
+            
+            if (matchedModel) {
+                // 使用找到的模型配置
+                document.getElementById('apiKey').value = matchedModel.api_key || '';
+                document.getElementById('baseUrl').value = matchedModel.base_url || '';
+                // 显示模型名称（model_name字段）
+                document.getElementById('defaultModel').value = matchedModel.model_name || currentModel;
+            } else {
+                // 如果没找到，使用默认API配置
+                const response = await fetch('/api/get_config');
+                const data = await response.json();
+                
+                document.getElementById('apiKey').value = data.api_key || '';
+                document.getElementById('baseUrl').value = data.base_url || '';
+                document.getElementById('defaultModel').value = data.model_name || currentModel;
+            }
+        } else {
+            // 如果多模型配置加载失败，使用默认API配置
+            const response = await fetch('/api/get_config');
+            const data = await response.json();
+            
+            document.getElementById('apiKey').value = data.api_key || '';
+            document.getElementById('baseUrl').value = data.base_url || '';
+            document.getElementById('defaultModel').value = data.model_name || currentModel;
+        }
     } catch (error) {
         console.error('加载设置失败:', error);
     }
@@ -832,3 +880,356 @@ document.getElementById('enableAI').addEventListener('change', (e) => {
         aiSettings.classList.add('hidden');
     }
 });
+
+// 隐藏测试结果
+function hideTestResult() {
+    document.getElementById('connectionTestResult').classList.add('hidden');
+}
+
+// 显示测试结果
+function showTestResult(message, isSuccess) {
+    const resultDiv = document.getElementById('connectionTestResult');
+    const resultText = document.getElementById('testResultText');
+    const resultIcon = document.getElementById('testResultIcon');
+    const container = resultDiv.querySelector('div');
+    
+    resultText.textContent = message;
+    
+    // 重置样式
+    container.className = 'p-4 rounded-lg border-l-4 flex items-center justify-between';
+    resultIcon.className = 'fas mr-3 text-xl';
+    
+    if (isSuccess) {
+        container.classList.add('bg-green-50', 'border-green-500', 'text-green-800');
+        resultIcon.classList.add('fa-check-circle', 'text-green-600');
+    } else {
+        container.classList.add('bg-red-50', 'border-red-500', 'text-red-800');
+        resultIcon.classList.add('fa-exclamation-circle', 'text-red-600');
+    }
+    
+    resultDiv.classList.remove('hidden');
+}
+
+// 连通性测试函数
+async function testApiConnection() {
+    const testBtn = document.getElementById('testConnectionBtn');
+    const originalHTML = testBtn.innerHTML;
+    
+    // 隐藏之前的测试结果
+    hideTestResult();
+    
+    // 显示加载状态
+    testBtn.disabled = true;
+    testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>测试中...';
+    
+    try {
+        const response = await fetch('/api/test_connection');
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showTestResult(
+                `✓ 连接测试成功！Base URL: ${data.base_url} | 模型: ${data.model}`,
+                true
+            );
+        } else {
+            showTestResult(`✗ 连接测试失败：${data.error}`, false);
+        }
+    } catch (error) {
+        console.error('连接测试错误:', error);
+        showTestResult(`✗ 连接测试失败：${error.message}`, false);
+    } finally {
+        // 恢复按钮状态
+        testBtn.disabled = false;
+        testBtn.innerHTML = originalHTML;
+    }
+}
+
+// 停止服务器
+async function shutdownServer() {
+    if (!confirm('确定要停止服务器吗？\n\n停止后需要重新启动才能使用。')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/shutdown', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            // 显示提示信息
+            alert('服务器正在关闭...\n\n页面将在3秒后自动关闭');
+            
+            // 3秒后关闭页面
+            setTimeout(() => {
+                window.close();
+                // 如果无法关闭窗口，显示提示
+                setTimeout(() => {
+                    document.body.innerHTML = `
+                        <div style="display: flex; align-items: center; justify-content: center; height: 100vh; background: linear-gradient(to br, #EEF2FF, #E0E7FF);">
+                            <div style="text-align: center; padding: 40px; background: white; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1);">
+                                <i class="fas fa-check-circle" style="font-size: 64px; color: #10B981; margin-bottom: 20px;"></i>
+                                <h1 style="font-size: 24px; color: #1F2937; margin-bottom: 10px;">服务器已停止</h1>
+                                <p style="color: #6B7280; margin-bottom: 20px;">您可以关闭此页面了</p>
+                                <p style="color: #9CA3AF; font-size: 14px;">要重新启动，请双击"启动服务（后台）.command"</p>
+                            </div>
+                        </div>
+                    `;
+                }, 100);
+            }, 3000);
+        } else {
+            alert('停止服务器失败');
+        }
+    } catch (error) {
+        console.error('停止服务器错误:', error);
+        alert('停止服务器失败：' + error.message);
+    }
+}
+
+// ==================== TAB 切换功能 ====================
+function switchTab(tabName) {
+    const videoTab = document.getElementById('videoTab');
+    const audioTab = document.getElementById('audioTab');
+    const linkTab = document.getElementById('linkTab');
+    const videoContent = document.getElementById('videoTabContent');
+    const audioContent = document.getElementById('audioTabContent');
+    const linkContent = document.getElementById('linkTabContent');
+    
+    // 重置所有TAB样式
+    [videoTab, audioTab, linkTab].forEach(tab => {
+        tab.classList.remove('border-indigo-600', 'text-indigo-600');
+        tab.classList.add('border-transparent', 'text-gray-600');
+    });
+    
+    // 隐藏所有内容
+    [videoContent, audioContent, linkContent].forEach(content => {
+        content.classList.add('hidden');
+    });
+    
+    // 激活选中的TAB
+    if (tabName === 'video') {
+        videoTab.classList.add('border-indigo-600', 'text-indigo-600');
+        videoTab.classList.remove('border-transparent', 'text-gray-600');
+        videoContent.classList.remove('hidden');
+    } else if (tabName === 'audio') {
+        audioTab.classList.add('border-indigo-600', 'text-indigo-600');
+        audioTab.classList.remove('border-transparent', 'text-gray-600');
+        audioContent.classList.remove('hidden');
+    } else if (tabName === 'link') {
+        linkTab.classList.add('border-indigo-600', 'text-indigo-600');
+        linkTab.classList.remove('border-transparent', 'text-gray-600');
+        linkContent.classList.remove('hidden');
+    }
+}
+
+// ==================== 音频提取功能 ====================
+let audioFiles = [];
+let extractedAudioFiles = [];
+
+// 初始化音频提取功能
+document.addEventListener('DOMContentLoaded', function() {
+    const audioDropZone = document.getElementById('audioDropZone');
+    const audioFileInput = document.getElementById('audioFileInput');
+    
+    if (audioDropZone && audioFileInput) {
+        // 点击上传
+        audioDropZone.addEventListener('click', () => audioFileInput.click());
+        
+        // 文件选择
+        audioFileInput.addEventListener('change', (e) => {
+            handleAudioFiles(Array.from(e.target.files));
+        });
+        
+        // 拖拽上传
+        audioDropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            audioDropZone.classList.add('border-indigo-500', 'bg-indigo-50');
+        });
+        
+        audioDropZone.addEventListener('dragleave', () => {
+            audioDropZone.classList.remove('border-indigo-500', 'bg-indigo-50');
+        });
+        
+        audioDropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            audioDropZone.classList.remove('border-indigo-500', 'bg-indigo-50');
+            handleAudioFiles(Array.from(e.dataTransfer.files));
+        });
+    }
+});
+
+function handleAudioFiles(files) {
+    const videoExtensions = ['mp4', 'avi', 'mov', 'mkv', 'flv', 'wmv', 'm4v', 'webm'];
+    
+    files.forEach(file => {
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (videoExtensions.includes(ext)) {
+            audioFiles.push(file);
+        }
+    });
+    
+    updateAudioFileList();
+    updateAudioStats();
+}
+
+function updateAudioFileList() {
+    const fileList = document.getElementById('audioFileList');
+    const fileCount = document.getElementById('audioFileCount');
+    
+    fileCount.textContent = `(${audioFiles.length} 个文件)`;
+    
+    if (audioFiles.length === 0) {
+        fileList.innerHTML = `
+            <div class="text-center py-8 text-gray-400">
+                <i class="fas fa-inbox text-4xl mb-2"></i>
+                <p class="text-sm">暂无文件，请上传视频</p>
+            </div>
+        `;
+        return;
+    }
+    
+    fileList.innerHTML = audioFiles.map((file, index) => `
+        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+            <div class="flex items-center flex-1 min-w-0">
+                <i class="fas fa-file-video text-indigo-600 mr-3 text-lg"></i>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-800 truncate">${file.name}</p>
+                    <p class="text-xs text-gray-500">${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                </div>
+            </div>
+            <button onclick="removeAudioFile(${index})" class="ml-3 text-red-600 hover:text-red-800">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+function removeAudioFile(index) {
+    audioFiles.splice(index, 1);
+    updateAudioFileList();
+    updateAudioStats();
+}
+
+function clearAllAudioFiles() {
+    if (audioFiles.length === 0) return;
+    if (confirm('确定要清空所有文件吗？')) {
+        audioFiles = [];
+        extractedAudioFiles = [];
+        updateAudioFileList();
+        updateAudioStats();
+        updateOutputFilesList();
+        document.getElementById('downloadAllBtn').disabled = true;
+    }
+}
+
+function updateAudioStats() {
+    document.getElementById('statTotal').textContent = audioFiles.length;
+    const completed = extractedAudioFiles.filter(f => f.status === 'completed').length;
+    const processing = extractedAudioFiles.filter(f => f.status === 'processing').length;
+    const failed = extractedAudioFiles.filter(f => f.status === 'failed').length;
+    
+    document.getElementById('statCompleted').textContent = completed;
+    document.getElementById('statProcessing').textContent = processing;
+    document.getElementById('statFailed').textContent = failed;
+}
+
+async function startAudioExtraction() {
+    if (audioFiles.length === 0) {
+        alert('请先上传视频文件');
+        return;
+    }
+    
+    const extractBtn = document.getElementById('extractBtn');
+    extractBtn.disabled = true;
+    extractBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>处理中...';
+    
+    const format = document.getElementById('outputFormat').value;
+    const bitrate = document.getElementById('bitrate').value;
+    const sampleRate = document.getElementById('sampleRate').value;
+    
+    for (let i = 0; i < audioFiles.length; i++) {
+        const file = audioFiles[i];
+        const fileInfo = {
+            name: file.name,
+            status: 'processing',
+            outputUrl: null
+        };
+        extractedAudioFiles.push(fileInfo);
+        updateAudioStats();
+        
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('format', format);
+            formData.append('bitrate', bitrate);
+            formData.append('sample_rate', sampleRate);
+            
+            const response = await fetch('/audio/extract', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                fileInfo.status = 'completed';
+                fileInfo.outputUrl = data.download_url;
+                fileInfo.outputName = data.filename;
+            } else {
+                fileInfo.status = 'failed';
+            }
+        } catch (error) {
+            console.error('提取失败:', error);
+            fileInfo.status = 'failed';
+        }
+        
+        updateAudioStats();
+        updateOutputFilesList();
+    }
+    
+    extractBtn.disabled = false;
+    extractBtn.innerHTML = '<i class="fas fa-play mr-2"></i>开始提取';
+    document.getElementById('downloadAllBtn').disabled = false;
+}
+
+function updateOutputFilesList() {
+    const outputList = document.getElementById('outputFilesList');
+    const completed = extractedAudioFiles.filter(f => f.status === 'completed');
+    
+    if (completed.length === 0) {
+        outputList.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">暂无输出文件</p>';
+        return;
+    }
+    
+    outputList.innerHTML = completed.map(file => `
+        <div class="flex items-center justify-between p-2 bg-gray-50 rounded hover:bg-gray-100">
+            <div class="flex items-center flex-1 min-w-0">
+                <i class="fas fa-file-audio text-green-600 mr-2"></i>
+                <span class="text-sm text-gray-700 truncate">${file.outputName}</span>
+            </div>
+            <a href="${file.outputUrl}" download class="ml-2 text-indigo-600 hover:text-indigo-800">
+                <i class="fas fa-download"></i>
+            </a>
+        </div>
+    `).join('');
+}
+
+function downloadAllAudio() {
+    const completed = extractedAudioFiles.filter(f => f.status === 'completed');
+    if (completed.length === 0) {
+        alert('没有可下载的文件');
+        return;
+    }
+    
+    completed.forEach(file => {
+        const a = document.createElement('a');
+        a.href = file.outputUrl;
+        a.download = file.outputName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    });
+}

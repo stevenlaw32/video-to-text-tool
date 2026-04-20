@@ -2,6 +2,26 @@
 
 自动提取视频内容并生成结构化文档的AI工具。支持本地视频批量处理，使用Whisper进行语音识别，结合GPT进行智能整理。
 
+## 🚀 快速开始
+
+**首次使用？** 运行一键安装脚本：
+
+```bash
+# macOS/Linux
+./环境检查与安装.sh
+
+# Windows
+环境检查与安装.bat
+```
+
+脚本会自动检查环境、安装依赖、配置国内镜像源、下载模型。
+
+**✨ 离线安装支持**: 如果项目包含 `offline_packages/` 目录，脚本会优先使用离线包，无需网络！
+
+📖 **详细说明**: [快速开始.md](快速开始.md) | [离线安装指南.md](离线安装指南.md)
+
+---
+
 ## 功能特点
 
 - 🎥 **视频转文字**: 使用OpenAI Whisper模型进行高精度语音识别
@@ -38,6 +58,8 @@ pip install -r requirements.txt
 
 ### 3. 配置API密钥
 
+#### 方式一：使用 .env 文件（推荐）
+
 复制配置文件并填入你的API信息：
 
 ```bash
@@ -47,10 +69,23 @@ cp .env.example .env
 编辑 `.env` 文件：
 
 ```env
-OPENAI_API_KEY=sk-OqWvpgQAJcG778jwKgtPxqbqmmOtX0RUNYbIkUzAlzJhr2kd
-OPENAI_BASE_URL=https://api.qingyuntop.top/v1
+OPENAI_API_KEY=your-api-key-here
+OPENAI_BASE_URL=https://api.openai.com/v1
 MODEL_NAME=gpt-4o
 ```
+
+#### 方式二：使用多模型配置
+
+复制模型配置示例：
+
+```bash
+cp models.json.example models.json
+cp ocr_apis.json.example ocr_apis.json
+```
+
+然后在 Web 界面的"模型设置"中配置你的 API 密钥。
+
+**⚠️ 安全提示**: 请勿将包含真实 API 密钥的配置文件提交到 Git！详见 `README_SECURITY.md`
 
 ## 使用方法
 

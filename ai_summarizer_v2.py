@@ -1,59 +1,45 @@
-"""
-AI 摘要生成器 V2 - 使用通用 API 客户端
-这是使用新的通用 API 模块重写的版本
-"""
-
+from openai import OpenAI
+from dotenv import load_dotenv
 import os
-from api_client import UniversalAPIClient
-from api_config import APIConfig
-from typing import Optional
+
+load_dotenv()
 
 
 class AISummarizerV2:
-    def __init__(self, config: Optional[APIConfig] = None):
-        """
-        初始化 AI 摘要生成器
+    def __init__(self, api_key=None, base_url=None, model=None):
+        self.api_key = api_key or os.getenv('OPENAI_API_KEY')
+        self.base_url = base_url or os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+        self.model = model or os.getenv('MODEL_NAME', 'gpt-4o')
         
-        Args:
-            config: API 配置对象，如果不提供则使用默认配置
-        """
-        self.client = UniversalAPIClient(config)
+        self.client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.base_url
+        )
     
-    def summarize(self, transcript: str, style: str = "tutorial") -> str:
-        """
-        使用 AI 整理视频转录文本
+    def summarize(self, text, style='tutorial', custom_prompt=None):
+        if custom_prompt:
+            prompt = custom_prompt
+        else:
+            style_prompts = {
+                'tutorial': '请将以下内容整理成结构化的教程格式，包含章节、步骤和要点。',
+                'summary': '请对以下内容进行简洁的摘要，提取核心要点。',
+                'notes': '请将以下内容整理成学习笔记格式，便于复习和记忆。'
+            }
+            prompt = style_prompts.get(style, style_prompts['tutorial'])
         
-        Args:
-            transcript: 视频转录文本
-            style: 整理风格，可选值：tutorial（教程）、summary（摘要）、notes（笔记）
+        messages = [
+            {"role": "system", "content": "你是一个专业的内容整理助手。"},
+            {"role": "user", "content": f"{prompt}\n\n{text}"}
+        ]
         
-        Returns:
-            str: 整理后的文本
-        """
-        return self.client.summarize(transcript, style=style)
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.7
+        )
+        
+        return response.choices[0].message.content
     
-    def batch_summarize(self, transcripts: list[str], style: str = "tutorial") -> list[str]:
-        """
-        批量处理多个转录文本
-        
-        Args:
-            transcripts: 转录文本列表
-            style: 整理风格
-        
-        Returns:
-            list[str]: 整理后的文本列表
-        """
-        return self.client.batch_process(transcripts, process_func="summarize", style=style)
-    
-    def save_summary(self, summary: str, output_path: str):
-        """
-        保存摘要到文件
-        
-        Args:
-            summary: 摘要内容
-            output_path: 输出文件路径
-        """
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    def save_summary(self, summary, output_path):
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(summary)
-        print(f"总结已保存到: {output_path}")

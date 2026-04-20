@@ -58,19 +58,24 @@ def save_config():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@api_bp.route('/test_connection', methods=['POST'])
+@api_bp.route('/test_connection', methods=['GET', 'POST'])
 def test_connection():
     """测试 API 连接"""
     try:
-        data = request.json
-        
-        # 创建临时配置
         config = APIConfig()
-        config.update_config(
-            api_key=data.get('api_key'),
-            base_url=data.get('base_url'),
-            model_name=data.get('model_name')
-        )
+        
+        if request.method == 'POST':
+            # POST方法：使用提交的临时配置
+            data = request.json
+            config.update_config(
+                api_key=data.get('api_key'),
+                base_url=data.get('base_url'),
+                model_name=data.get('model_name')
+            )
+        # GET方法：使用当前保存的配置
+        
+        # 获取配置信息
+        config_data = config.get_all_config()
         
         # 尝试创建客户端并发送测试请求
         client = UniversalAPIClient(config)
@@ -84,6 +89,8 @@ def test_connection():
         return jsonify({
             'success': True,
             'message': '连接测试成功',
+            'base_url': config_data.get('base_url'),
+            'model': config_data.get('model_name'),
             'response': response
         })
         

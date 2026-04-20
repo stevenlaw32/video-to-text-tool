@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR 配置 - 视频转文字工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-6 max-w-6xl">
+        <!-- Header -->
+        <div class="mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-eye mr-3 text-indigo-600"></i>OCR 配置管理
+                    </h1>
+                    <p class="text-gray-600">配置本地或云端 OCR 服务，用于无声视频文字提取</p>
+                </div>
+                <a href="/" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors">
+                    <i class="fas fa-arrow-left mr-2"></i>返回主页
+                </a>
+            </div>
+        </div>
+
+        <!-- Active Provider Selection -->
+        <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-check-circle mr-2 text-green-600"></i>当前激活的 OCR 引擎
+            </h2>
+            <div class="flex items-center space-x-4">
+                <select id="activeProvider" class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-lg">
+                    <option value="">加载中...</option>
+                </select>
+                <button onclick="setActiveProvider()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-semibold">
+                    <i class="fas fa-save mr-2"></i>切换
+                </button>
+            </div>
+            <p class="text-sm text-gray-500 mt-2">
+                <i class="fas fa-info-circle mr-1"></i>
+                处理无声视频时将自动使用选中的 OCR 引擎
+            </p>
+        </div>
+
+        <!-- Provider Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Surya OCR (本地) -->
+            <div class="bg-white rounded-2xl shadow-xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-laptop mr-2 text-blue-600"></i>Surya OCR (本地)
+                    </h3>
+                    <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
+                        免费
+                    </span>
+                </div>
+                <p class="text-sm text-gray-600 mb-4">
+                    本地 OCR 引擎，无需 API，完全免费使用。中文识别准确率 90%+。
+                </p>
+                <div class="space-y-2 text-sm">
+                    <div class="flex items-center text-gray-700">
+                        <i class="fas fa-check text-green-600 mr-2"></i>
+                        <span>无需网络连接</span>
+                    </div>
+                    <div class="flex items-center text-gray-700">
+                        <i class="fas fa-check text-green-600 mr-2"></i>
+                        <span>隐私安全</span>
+                    </div>
+                    <div class="flex items-center text-gray-700">
+                        <i class="fas fa-check text-green-600 mr-2"></i>
+                        <span>支持多语言</span>
+                    </div>
+                </div>
+                <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <p class="text-xs text-blue-800">
+                        <i class="fas fa-lightbulb mr-1"></i>
+                        <strong>提示：</strong>需要安装 surya-ocr 依赖
+                    </p>
+                </div>
+            </div>
+
+            <!-- 百度 OCR -->
+            <div class="bg-white rounded-2xl shadow-xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-cloud mr-2 text-red-600"></i>百度 OCR
+                    </h3>
+                    <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+                        500次/天
+                    </span>
+                </div>
+                <p class="text-sm text-gray-600 mb-4">
+                    百度智能云 OCR，识别准确率高，免费额度充足。
+                </p>
+                
+                <div id="baiduConfig" class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">API Key</label>
+                        <input type="text" id="baiduApiKey" placeholder="请输入百度 API Key" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Secret Key</label>
+                        <input type="password" id="baiduSecretKey" placeholder="请输入百度 Secret Key" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="saveBaiduConfig()" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-semibold">
+                            <i class="fas fa-save mr-1"></i>保存
+                        </button>
+                        <button onclick="testProvider('baidu')" class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm font-semibold">
+                            <i class="fas fa-plug mr-1"></i>测试
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <a href="https://cloud.baidu.com/product/ocr" target="_blank" 
+                       class="text-xs text-indigo-600 hover:text-indigo-800">
+                        <i class="fas fa-external-link-alt mr-1"></i>获取 API 密钥
+                    </a>
+                </div>
+            </div>
+
+            <!-- 腾讯云 OCR -->
+            <div class="bg-white rounded-2xl shadow-xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-cloud mr-2 text-blue-600"></i>腾讯云 OCR
+                    </h3>
+                    <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-semibold">
+                        1000次/月
+                    </span>
+                </div>
+                <p class="text-sm text-gray-600 mb-4">
+                    腾讯云 OCR，识别速度快，支持多种场景。
+                </p>
+                
+                <div id="tencentConfig" class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Secret ID</label>
+                        <input type="text" id="tencentSecretId" placeholder="请输入腾讯云 Secret ID" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Secret Key</label>
+                        <input type="password" id="tencentSecretKey" placeholder="请输入腾讯云 Secret Key" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">地域</label>
+                        <select id="tencentRegion" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                            <option value="ap-guangzhou">广州</option>
+                            <option value="ap-shanghai">上海</option>
+                            <option value="ap-beijing">北京</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="saveTencentConfig()" class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm font-semibold">
+                            <i class="fas fa-save mr-1"></i>保存
+                        </button>
+                        <button onclick="testProvider('tencent')" class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm font-semibold">
+                            <i class="fas fa-plug mr-1"></i>测试
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <a href="https://cloud.tencent.com/product/ocr" target="_blank" 
+                       class="text-xs text-indigo-600 hover:text-indigo-800">
+                        <i class="fas fa-external-link-alt mr-1"></i>获取 API 密钥
+                    </a>
+                </div>
+            </div>
+
+            <!-- 阿里云 OCR -->
+            <div class="bg-white rounded-2xl shadow-xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        <i class="fas fa-cloud mr-2 text-orange-600"></i>阿里云 OCR
+                    </h3>
+                    <span class="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm font-semibold">
+                        按量付费
+                    </span>
+                </div>
+                <p class="text-sm text-gray-600 mb-4">
+                    阿里云 OCR，企业级服务，稳定可靠。
+                </p>
+                
+                <div id="aliyunConfig" class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Access Key ID</label>
+                        <input type="text" id="aliyunAccessKeyId" placeholder="请输入阿里云 Access Key ID" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Access Key Secret</label>
+                        <input type="password" id="aliyunAccessKeySecret" placeholder="请输入阿里云 Access Key Secret" 
+                               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">地域</label>
+                        <select id="aliyunRegion" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm">
+                            <option value="cn-shanghai">上海</option>
+                            <option value="cn-beijing">北京</option>
+                            <option value="cn-hangzhou">杭州</option>
+                        </select>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="saveAliyunConfig()" class="flex-1 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors text-sm font-semibold">
+                            <i class="fas fa-save mr-1"></i>保存
+                        </button>
+                        <button onclick="testProvider('aliyun')" class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors text-sm font-semibold">
+                            <i class="fas fa-plug mr-1"></i>测试
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <a href="https://www.aliyun.com/product/ocr" target="_blank" 
+                       class="text-xs text-indigo-600 hover:text-indigo-800">
+                        <i class="fas fa-external-link-alt mr-1"></i>获取 API 密钥
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Help Section -->
+        <div class="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fas fa-info-circle text-blue-600 text-xl"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-semibold text-blue-800 mb-2">使用说明</h3>
+                    <ul class="text-sm text-blue-700 space-y-1">
+                        <li>• <strong>本地 OCR</strong>：需要安装 surya-ocr 依赖，完全免费，隐私安全</li>
+                        <li>• <strong>云端 OCR</strong>：需要申请对应云服务商的 API 密钥，按调用次数计费</li>
+                        <li>• 配置完成后，处理无声视频时会自动使用选中的 OCR 引擎</li>
+                        <li>• 建议优先使用本地 Surya OCR，如需更高准确率可选择云端服务</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/ocr_settings.js"></script>
+</body>
+</html>
