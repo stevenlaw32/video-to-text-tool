@@ -1233,3 +1233,387 @@ function downloadAllAudio() {
         document.body.removeChild(a);
     });
 }
+
+// ==================== 视频链接解析功能 ====================
+
+// 清空链接输入
+function clearLinkInput() {
+    document.getElementById('videoLinkInput').value = '';
+    document.getElementById('batchLinksInput').value = '';
+    document.getElementById('linkResultsArea').classList.add('hidden');
+    document.getElementById('linkResults').innerHTML = '';
+}
+
+// 从文本中提取URL
+function extractUrl(text) {
+    text = text.trim();
+    
+    // 尝试匹配URL模式
+    const urlPattern = /(https?:\/\/[^\s]+)/i;
+    const match = text.match(urlPattern);
+    
+    if (match) {
+        return match[1];
+    }
+    
+    // 如果没有找到完整URL，尝试查找域名
+    const domainPattern = /((?:v\.douyin\.com|www\.douyin\.com|douyin\.com|xiaohongshu\.com|xhslink\.com|kuaishou\.com|ksurl\.cn)[^\s]*)/i;
+    const domainMatch = text.match(domainPattern);
+    
+    if (domainMatch) {
+        return 'https://' + domainMatch[1];
+    }
+    
+    return text;
+}
+
+// 修复URL协议
+function fixUrlProtocol(url) {
+    // 先提取纯URL
+    url = extractUrl(url);
+    url = url.trim();
+    
+    // 移除可能的尾部标点符号
+    url = url.replace(/[，。！？、；：""''（）《》【】\s]+$/, '');
+    
+    // 如果URL不包含协议，添加https://
+    if (!url.match(/^https?:\/\//i)) {
+        // 如果以//开头，添加https:
+        if (url.startsWith('//')) {
+            return 'https:' + url;
+        }
+        // 否则添加https://
+        return 'https://' + url;
+    }
+    return url;
+}
+
+// 开始链接解析
+async function startLinkParsing() {
+    const singleLink = document.getElementById('videoLinkInput').value.trim();
+    const batchLinks = document.getElementById('batchLinksInput').value.trim();
+    
+    // 收集所有链接
+    let urls = [];
+    if (singleLink) {
+        urls.push(fixUrlProtocol(singleLink));
+    }
+    if (batchLinks) {
+        const lines = batchLinks.split('\n').map(line => line.trim()).filter(line => line);
+        urls.push(...lines.map(fixUrlProtocol));
+    }
+    
+    if (urls.length === 0) {
+        alert('请输入至少一个视频链接');
+        return;
+    }
+    
+    // 获取处理模式和设置
+    const processMode = document.getElementById('linkProcessMode').value;
+    const whisperModel = document.getElementById('linkWhisperModel').value;
+    const language = document.getElementById('linkLanguage').value;
+    const enableAI = document.getElementById('linkEnableAI').checked;
+    
+    // 显示结果区域
+    const resultsArea = document.getElementById('linkResultsArea');
+    const resultsDiv = document.getElementById('linkResults');
+    resultsArea.classList.remove('hidden');
+    resultsDiv.innerHTML = '<div class="text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>处理中...</div>';
+    
+    try {
+        if (processMode === 'download') {
+            // 仅下载模式
+            await downloadVideosOnly(urls);
+        } else {
+            // 下载并转录模式
+            await downloadAndTranscribe(urls, whisperModel, language, enableAI);
+        }
+    } catch (error) {
+        resultsDiv.innerHTML = `
+            <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p class="text-red-800"><i class="fas fa-exclamation-circle mr-2"></i>处理失败: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+// 仅下载视频
+async function downloadVideosOnly(urls) {
+    const resultsDiv = document.getElementById('linkResults');
+    resultsDiv.innerHTML = '';
+    
+    for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        const resultId = `link-result-${i}`;
+        
+        // 添加处理项
+        resultsDiv.innerHTML += `
+            <div id="${resultId}" class="p-4 border border-gray-200 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <p class="text-sm text-gray-600 mb-1">链接 ${i + 1}/${urls.length}</p>
+                        <p class="text-xs text-gray-500 truncate">${url}</p>
+                    </div>
+                    <div class="ml-4">
+                        <i class="fas fa-spinner fa-spin text-indigo-600"></i>
+                    </div>
+                </div>
+                <div class="mt-2 text-sm text-gray-600">
+                    <i class="fas fa-info-circle mr-1"></i>解析中...
+                </div>
+            </div>
+        `;
+        
+        try {
+            // 调用后端API解析链接
+            const response = await fetch('/api/video-link/parse', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ url: url })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // 解析成功，触发下载
+                const videoUrl = result.video_url;
+                const title = result.title || '视频';
+                const platform = result.platform || 'video';
+                
+                // 更新状态为下载中
+                document.getElementById(resultId).innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <p class="font-medium text-gray-800">${title}</p>
+                            <p class="text-xs text-gray-500 mt-1">平台: ${platform}</p>
+                        </div>
+                        <div class="ml-4">
+                            <i class="fas fa-download text-blue-600"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-sm text-blue-600">
+                        <i class="fas fa-info-circle mr-1"></i>开始下载...
+                    </div>
+                `;
+                
+                // 触发浏览器下载
+                const a = document.createElement('a');
+                a.href = videoUrl;
+                a.download = `${platform}_${title}.mp4`;
+                a.target = '_blank';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                
+                // 更新为完成状态
+                setTimeout(() => {
+                    document.getElementById(resultId).innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <p class="font-medium text-gray-800">${title}</p>
+                                <p class="text-xs text-gray-500 mt-1">平台: ${platform}</p>
+                            </div>
+                            <div class="ml-4">
+                                <i class="fas fa-check-circle text-green-600"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-sm text-green-600">
+                            <i class="fas fa-check mr-1"></i>已发送到下载文件夹
+                        </div>
+                    `;
+                }, 1000);
+                
+            } else {
+                // 解析失败 - 提供详细的错误信息和解决方案
+                const errorMsg = result.error || '解析失败';
+                const isDouyinCookieError = errorMsg.includes('Cookie') || errorMsg.includes('cookie');
+                
+                let solutionHtml = '';
+                if (isDouyinCookieError) {
+                    solutionHtml = `
+                        <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                            <p class="font-semibold text-yellow-800 mb-2">💡 抖音反爬虫限制</p>
+                            <p class="text-yellow-700 mb-2">抖音有严格的反爬虫机制，目前解析受限。</p>
+                            <p class="text-yellow-700 font-semibold mb-1">建议方案：</p>
+                            <ul class="list-disc list-inside text-yellow-700 space-y-1 ml-2">
+                                <li>使用"批量上传视频"TAB，上传本地视频文件</li>
+                                <li>或尝试使用浏览器扩展下载视频后上传</li>
+                                <li>小红书解析成功率较高，可以测试</li>
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById(resultId).innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <p class="text-sm text-gray-600 truncate">${url}</p>
+                        </div>
+                        <div class="ml-4">
+                            <i class="fas fa-times-circle text-red-600"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-sm text-red-600">
+                        <i class="fas fa-exclamation-circle mr-1"></i>${errorMsg}
+                    </div>
+                    ${solutionHtml}
+                `;
+            }
+        } catch (error) {
+            document.getElementById(resultId).innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <p class="text-sm text-gray-600 truncate">${url}</p>
+                    </div>
+                    <div class="ml-4">
+                        <i class="fas fa-times-circle text-red-600"></i>
+                    </div>
+                </div>
+                <div class="mt-2 text-sm text-red-600">
+                    <i class="fas fa-exclamation-circle mr-1"></i>网络错误: ${error.message}
+                </div>
+            `;
+        }
+        
+        // 添加延迟，避免请求过快
+        if (i < urls.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+    }
+}
+
+// 下载并转录
+async function downloadAndTranscribe(urls, whisperModel, language, enableAI) {
+    const resultsDiv = document.getElementById('linkResults');
+    resultsDiv.innerHTML = '';
+    
+    for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        const resultId = `link-result-${i}`;
+        
+        // 添加处理项
+        resultsDiv.innerHTML += `
+            <div id="${resultId}" class="p-4 border border-gray-200 rounded-lg">
+                <div class="flex items-center justify-between">
+                    <div class="flex-1">
+                        <p class="text-sm text-gray-600 mb-1">链接 ${i + 1}/${urls.length}</p>
+                        <p class="text-xs text-gray-500 truncate">${url}</p>
+                    </div>
+                    <div class="ml-4">
+                        <i class="fas fa-spinner fa-spin text-indigo-600"></i>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <div class="text-sm text-gray-600">
+                        <i class="fas fa-circle-notch fa-spin mr-1"></i>步骤 1/4: 解析链接...
+                    </div>
+                    <div class="mt-2 w-full bg-gray-200 rounded-full h-2">
+                        <div class="bg-indigo-600 h-2 rounded-full transition-all" style="width: 25%"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        try {
+            // 调用后端API进行完整处理
+            const response = await fetch('/api/video-link/parse-and-transcribe', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    url: url,
+                    whisper_model: whisperModel,
+                    language: language,
+                    enable_ai: enableAI
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // 处理成功
+                const title = result.title || '视频';
+                const author = result.author || '未知';
+                const platform = result.platform || 'video';
+                
+                document.getElementById(resultId).innerHTML = `
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex-1">
+                                <p class="font-semibold text-gray-800">${title}</p>
+                                <p class="text-sm text-gray-600 mt-1">作者: ${author} | 平台: ${platform}</p>
+                            </div>
+                            <div class="ml-4">
+                                <i class="fas fa-check-circle text-green-600 text-2xl"></i>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            ${result.transcript_file ? `
+                                <a href="${result.transcript_file}" target="_blank" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                                    <i class="fas fa-file-alt mr-1"></i>转录文本
+                                </a>
+                            ` : ''}
+                            ${result.ai_summary_file ? `
+                                <a href="${result.ai_summary_file}" target="_blank" class="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700">
+                                    <i class="fas fa-brain mr-1"></i>AI 摘要
+                                </a>
+                            ` : ''}
+                            ${result.video_file ? `
+                                <a href="${result.video_file}" download class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700">
+                                    <i class="fas fa-download mr-1"></i>视频文件
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // 处理失败
+                document.getElementById(resultId).innerHTML = `
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div class="flex-1">
+                                <p class="text-sm text-gray-600 truncate">${url}</p>
+                            </div>
+                            <div class="ml-4">
+                                <i class="fas fa-times-circle text-red-600 text-2xl"></i>
+                            </div>
+                        </div>
+                        <div class="mt-2 text-sm text-red-600">
+                            <i class="fas fa-exclamation-circle mr-1"></i>${result.error || '处理失败'}
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            document.getElementById(resultId).innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <p class="text-sm text-gray-600 truncate">${url}</p>
+                        </div>
+                        <div class="ml-4">
+                            <i class="fas fa-times-circle text-red-600 text-2xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-sm text-red-600">
+                        <i class="fas fa-exclamation-circle mr-1"></i>网络错误: ${error.message}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 添加延迟
+        if (i < urls.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+    }
+}
+
+// 监听处理模式变化，显示/隐藏 Whisper 设置
+document.getElementById('linkProcessMode')?.addEventListener('change', function() {
+    const whisperSettings = document.getElementById('linkWhisperSettings');
+    if (this.value === 'download') {
+        whisperSettings.classList.add('hidden');
+    } else {
+        whisperSettings.classList.remove('hidden');
+    }
+});

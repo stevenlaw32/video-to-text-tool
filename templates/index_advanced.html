@@ -375,31 +375,153 @@
 
         <!-- Link Tab Content -->
         <div id="linkTabContent" class="hidden">
-            <div class="bg-white rounded-2xl shadow-xl p-8">
-                <div class="text-center py-16">
-                    <i class="fas fa-link text-6xl text-gray-300 mb-6"></i>
-                    <h2 class="text-2xl font-semibold text-gray-800 mb-3">视频链接解析</h2>
-                    <p class="text-gray-500 mb-6">此功能正在开发中，敬请期待...</p>
-                    <div class="max-w-2xl mx-auto text-left bg-gray-50 rounded-lg p-6">
-                        <h3 class="text-sm font-semibold text-gray-700 mb-3">
-                            <i class="fas fa-info-circle mr-2 text-indigo-600"></i>计划支持的功能：
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Panel: Link Input -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Link Input Area -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-link mr-2 text-indigo-600"></i>视频链接解析
+                        </h2>
+                        
+                        <div class="mb-4 p-4 bg-blue-50 rounded-lg">
+                            <p class="text-sm text-blue-800">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <strong>支持平台：</strong>
+                                <span class="inline-block px-2 py-1 bg-black text-white text-xs rounded ml-2">抖音</span>
+                                <span class="inline-block px-2 py-1 bg-red-500 text-white text-xs rounded ml-2">小红书</span>
+                                <span class="inline-block px-2 py-1 bg-orange-500 text-white text-xs rounded ml-2">快手</span>
+                            </p>
+                        </div>
+
+                        <!-- Single Link Input -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                视频链接
+                            </label>
+                            <textarea
+                                id="videoLinkInput"
+                                rows="3"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                placeholder="粘贴抖音或小红书视频链接...&#10;例如：https://v.douyin.com/xxxxx/"
+                            ></textarea>
+                        </div>
+
+                        <!-- Batch Links Input -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                批量处理（每行一个链接）
+                            </label>
+                            <textarea
+                                id="batchLinksInput"
+                                rows="5"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                placeholder="批量处理多个链接，每行一个...&#10;https://v.douyin.com/xxxxx/&#10;https://www.xiaohongshu.com/explore/xxxxx"
+                            ></textarea>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex gap-3">
+                            <button onclick="startLinkParsing()" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors flex items-center justify-center">
+                                <i class="fas fa-play mr-2"></i>开始处理
+                            </button>
+                            <button onclick="clearLinkInput()" class="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                                <i class="fas fa-eraser mr-2"></i>清空
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Results Area -->
+                    <div id="linkResultsArea" class="bg-white rounded-2xl shadow-xl p-6 hidden">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-list-check mr-2 text-indigo-600"></i>处理结果
+                        </h3>
+                        <div id="linkResults" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Settings -->
+                <div class="space-y-6">
+                    <!-- Processing Mode -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-cog mr-2 text-indigo-600"></i>处理设置
+                        </h3>
+
+                        <!-- Mode Selection -->
+                        <div class="mb-4">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                处理模式
+                            </label>
+                            <select id="linkProcessMode" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                <option value="download">仅下载视频</option>
+                                <option value="transcribe" selected>下载并转录</option>
+                            </select>
+                            <p class="text-xs text-gray-500 mt-2">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                <strong>仅下载：</strong>直接保存到浏览器下载文件夹
+                            </p>
+                        </div>
+
+                        <!-- Whisper Settings (shown when transcribe mode) -->
+                        <div id="linkWhisperSettings">
+                            <div class="mb-4">
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    Whisper 模型
+                                </label>
+                                <select id="linkWhisperModel" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="tiny">Tiny - 最快</option>
+                                    <option value="base" selected>Base - 推荐</option>
+                                    <option value="small">Small - 更准确</option>
+                                    <option value="medium">Medium - 很准确</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    识别语言
+                                </label>
+                                <select id="linkLanguage" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                                    <option value="zh" selected>中文</option>
+                                    <option value="en">英文</option>
+                                    <option value="ja">日文</option>
+                                    <option value="ko">韩文</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="linkEnableAI" checked class="mr-2">
+                                    <span class="text-sm text-gray-700">启用 AI 整理</span>
+                                </label>
+                                <p class="text-xs text-gray-500 mt-1 ml-6">
+                                    生成结构化摘要文档
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Usage Tips -->
+                    <div class="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl shadow-xl p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-3">
+                            <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>使用提示
                         </h3>
                         <ul class="space-y-2 text-sm text-gray-600">
                             <li class="flex items-start">
-                                <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
-                                <span>支持主流视频平台链接解析（YouTube、B站、抖音等）</span>
+                                <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
+                                <span>支持抖音、小红书、快手链接</span>
                             </li>
                             <li class="flex items-start">
-                                <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
-                                <span>自动下载视频并进行转录</span>
+                                <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
+                                <span>批量处理时每行一个链接</span>
                             </li>
                             <li class="flex items-start">
-                                <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
-                                <span>批量链接处理</span>
+                                <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
+                                <span>仅下载模式直接保存到下载文件夹</span>
                             </li>
                             <li class="flex items-start">
-                                <i class="fas fa-check text-green-500 mr-2 mt-1"></i>
-                                <span>支持播放列表解析</span>
+                                <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
+                                <span>转录模式自动生成文字和摘要</span>
                             </li>
                         </ul>
                     </div>

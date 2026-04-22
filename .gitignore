@@ -20,3 +20,4 @@ requirements.txt
 .DS_Store
 venv/
 env/
+venv311/

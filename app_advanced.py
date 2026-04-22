@@ -23,6 +23,14 @@ from ocr_routes import ocr_bp
 from models_config import ModelsConfig
 from log_stream import log_stream
 
+# 尝试导入视频链接解析路由
+try:
+    from video_link_routes import video_link_bp
+    HAS_VIDEO_LINK = True
+except ImportError:
+    HAS_VIDEO_LINK = False
+    print("⚠️  视频链接解析模块未安装，链接解析功能将不可用")
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -30,6 +38,8 @@ app.register_blueprint(api_bp)
 app.register_blueprint(models_bp)
 app.register_blueprint(audio_bp)
 app.register_blueprint(ocr_bp)
+if HAS_VIDEO_LINK:
+    app.register_blueprint(video_link_bp)
 app.config['MAX_CONTENT_LENGTH'] = 2000 * 1024 * 1024
 app.config['UPLOAD_FOLDER'] = Path(tempfile.gettempdir()) / 'video_uploads'
 app.config['UPLOAD_FOLDER'].mkdir(exist_ok=True)
