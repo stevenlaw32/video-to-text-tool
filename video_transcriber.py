@@ -3,28 +3,71 @@ from pathlib import Path
 from typing import Optional
 import tempfile
 import ffmpeg
-import torch
-import whisper
 import sys
 from io import StringIO
+
+# MLX-Whisper：Apple Silicon 原生加速引擎（优先使用）
+try:
+    import mlx_whisper
+    HAS_MLX_WHISPER = True
+except ImportError:
+    HAS_MLX_WHISPER = False
+
+# openai-whisper：通用回退引擎
+try:
+    import torch
+    import whisper
+    HAS_OPENAI_WHISPER = True
+except ImportError:
+    HAS_OPENAI_WHISPER = False
+
+# MLX 模型映射：model_size -> HuggingFace repo
+_MLX_MODEL_MAP = {
+    "tiny":    "mlx-community/whisper-tiny-mlx",
+    "base":    "mlx-community/whisper-base-mlx",
+    "small":   "mlx-community/whisper-small-mlx",
+    "medium":  "mlx-community/whisper-medium-mlx",
+    "large":   "mlx-community/whisper-large-v3-mlx",
+    "large-v3": "mlx-community/whisper-large-v3-mlx",
+    "turbo":   "mlx-community/whisper-large-v3-turbo",
+}
 
 
 class VideoTranscriber:
     def __init__(self, model_size: str = "base"):
-        # 检测可用的设备
-        self.device = self._get_device()
-        
+        self._use_mlx = False
+        self.model = None
+        self.device = None
+        self.model_size = model_size
+
+        if HAS_MLX_WHISPER:
+            self._init_mlx(model_size)
+        elif HAS_OPENAI_WHISPER:
+            self.device = self._get_device()
+            self._init_openai_whisper(model_size)
+        else:
+            raise ImportError("未找到可用的 Whisper 引擎，请安装 mlx-whisper 或 openai-whisper")
+
+    def _init_mlx(self, model_size: str):
+        """初始化 MLX-Whisper（Apple Silicon 原生加速）"""
+        self._use_mlx = True
+        self._mlx_repo = _MLX_MODEL_MAP.get(model_size, f"mlx-community/whisper-{model_size}-mlx")
+        print(f"🚀 使用 MLX-Whisper 引擎（Apple Silicon 原生 GPU 加速）")
+        print(f"   模型: {model_size}  →  {self._mlx_repo}")
+        print(f"   💡 首次运行将自动下载模型（base 约 140MB）")
+        print(f"✓ MLX-Whisper 就绪！")
+
+    def _init_openai_whisper(self, model_size: str):
+        """初始化 openai-whisper（回退引擎）"""
         print(f"加载 Whisper {model_size} 模型...")
         print(f"推荐模型：tiny(最快) | base(推荐) | small(更准确)")
         print(f"你的配置适合：base 或 small 模型")
         print(f"使用设备: {self.device}")
-        
-        # 加载模型到指定设备
         self.model = whisper.load_model(model_size, device=self.device)
         print("模型加载完成！")
-        
+
     def _get_device(self):
-        """自动检测并返回最佳可用设备"""
+        """自动检测并返回最佳可用设备（仅用于 openai-whisper 回退）"""
         if torch.cuda.is_available():
             device = "cuda"
             gpu_name = torch.cuda.get_device_name(0)
@@ -38,7 +81,6 @@ class VideoTranscriber:
         else:
             device = "cpu"
             print(f"⚠ 未检测到 GPU，使用 CPU")
-        
         return device
     
     def extract_audio(self, video_path: str, output_path: Optional[str] = None) -> str:
@@ -101,50 +143,61 @@ class VideoTranscriber:
             has_log_stream = True
         except:
             has_log_stream = False
-        
+
+        engine_label = "MLX-Whisper (Apple Silicon)" if self._use_mlx else "Whisper (CPU)"
         print(f"\n{'=' * 70}")
-        print(f"🎤 Whisper 语音识别")
+        print(f"🎤 语音识别 [{engine_label}]")
         print(f"{'=' * 70}")
         print(f"   音频文件: {os.path.basename(audio_path)}")
-        print(f"   模型大小: {self.model.__class__.__name__}")
+        print(f"   模型大小: {self.model_size}")
         print(f"   识别语言: {language}")
         print(f"{'=' * 70}")
         print(f"\n💡 提示: 首次运行会自动下载模型，请耐心等待...\n")
         print(f"{'─' * 70}")
-        print(f"开始转录 (Whisper 详细日志如下):")
+        print(f"开始转录 (详细日志如下):")
         print(f"{'─' * 70}\n")
-        
+
         if has_log_stream:
             log_stream.add_log("═" * 50, "header")
-            log_stream.add_log("🎤 Whisper 语音识别开始", "header")
+            log_stream.add_log(f"🎤 语音识别开始 [{engine_label}]", "header")
             log_stream.add_log("═" * 50, "header")
             log_stream.add_log(f"音频文件: {os.path.basename(audio_path)}", "info")
-            log_stream.add_log(f"模型: Whisper {self.model.__class__.__name__}", "info")
+            log_stream.add_log(f"模型: {self.model_size}", "info")
             log_stream.add_log(f"语言: {language}", "info")
             log_stream.add_log("正在转录... (详细日志请查看终端)", "info")
-        
-        # 使用 openai-whisper 进行转录，启用进度显示
-        # verbose=True 会在终端显示每个音频片段的转录进度
-        result = self.model.transcribe(
-            audio_path,
-            language=language,
-            initial_prompt="以下是普通话的句子。",
-            verbose=True  # 显示转录进度：[00:00.000 --> 00:03.000] 文本内容
-        )
-        
+
+        if self._use_mlx:
+            # MLX-Whisper：Apple Silicon 原生加速，返回格式与 openai-whisper 兼容
+            result = mlx_whisper.transcribe(
+                audio_path,
+                path_or_hf_repo=self._mlx_repo,
+                language=language,
+                initial_prompt="以下是普通话的句子。",
+                verbose=True,
+            )
+        else:
+            # openai-whisper 回退
+            # verbose=True 会在终端显示每个音频片段的转录进度
+            result = self.model.transcribe(
+                audio_path,
+                language=language,
+                initial_prompt="以下是普通话的句子。",
+                verbose=True,
+            )
+
         print(f"\n{'─' * 70}")
-        print(f"✓ Whisper 转录完成！")
+        print(f"✓ 转录完成！")
         print(f"   转录文本长度: {len(result['text'])} 字符")
         print(f"   检测到的语言: {result.get('language', 'unknown')}")
         print(f"{'=' * 70}\n")
-        
+
         if has_log_stream:
             log_stream.add_log("─" * 50, "info")
-            log_stream.add_log("✓ Whisper 转录完成！", "success")
+            log_stream.add_log("✓ 转录完成！", "success")
             log_stream.add_log(f"转录文本长度: {len(result['text'])} 字符", "success")
             log_stream.add_log(f"检测到的语言: {result.get('language', 'unknown')}", "success")
             log_stream.add_log("═" * 50, "header")
-        
+
         return result
     
     def process_video(self, video_path: str, language: str = "zh") -> dict:

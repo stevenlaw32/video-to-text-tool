@@ -21,3 +21,4 @@ requirements.txt
 venv/
 env/
 venv311/
+venv311_intel_bak/

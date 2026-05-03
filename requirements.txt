@@ -6,6 +6,7 @@ Jinja2==3.1.2
 httpx==0.24.1
 httpcore==0.17.3
 requests==2.31.0
+mlx-whisper
 openai-whisper
 torch
 torchaudio
