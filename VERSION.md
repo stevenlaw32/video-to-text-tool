@@ -19,18 +19,14 @@
   - 仅下载视频
   - 下载并转录 + AI摘要
 
-#### 3. Cookie 自动管理 🔐
-- ✅ 自动从浏览器获取Cookie
-- ✅ 支持 Chrome、Edge、Safari、Firefox
-- ✅ 一键更新所有平台Cookie
-- ✅ 命令行工具：`python cookie_manager.py --update`
-
-#### 4. 集成强大的下载工具
+#### 3. 集成强大的下载工具
 - ✅ 集成 **yt-dlp**（支持1000+网站）
-- ✅ 下载 TikTokDownloader 和 XHS-Downloader
-- ✅ 提供一键安装脚本
+- ✅ 抖音使用 `iesdouyin` share API 解析 `play_addr`
+- ✅ 统一替换旧的 TikTokDownloader / XHS-Downloader 链路
+- ✅ 小红书等平台通过 `--cookies-from-browser chrome` 读取 Chrome 登录态
+- ✅ 后端下载完成后返回本地文件下载地址
 
-#### 5. 用户体验优化
+#### 4. 用户体验优化
 - ✅ 改进错误提示，提供详细解决方案
 - ✅ 智能识别反爬虫限制
 - ✅ 友好的操作指引
@@ -39,14 +35,9 @@
 ### 📦 新增文件
 
 ```
-cookie_manager.py              # Cookie自动管理工具
-local_video_parser.py          # 本地视频解析器
-simple_douyin_parser.py        # yt-dlp包装器
+local_video_parser.py          # 抖音专用路径 + yt-dlp 通用下载器
 video_link_routes.py           # 视频链接API路由
-安装视频解析库.sh              # 一键安装脚本
 启动服务（Python3.11）.command # Python 3.11启动脚本
-Python升级指南.md              # 详细升级文档
-简化使用说明.md                # Cookie功能说明
 ```
 
 ### ✅ 完全可用的功能
@@ -67,22 +58,17 @@ Python升级指南.md              # 详细升级文档
    - 多模型支持
    - 高质量输出
 
-4. **Cookie自动管理** ⭐⭐⭐⭐⭐
-   - 自动获取
-   - 一键更新
-   - 多浏览器支持
+4. **视频链接下载** ⭐⭐⭐⭐⭐
+   - yt-dlp 统一下载
+   - 抖音 iesdouyin 下载
+   - 支持浏览器 Cookie
+   - 可仅下载或继续转录
 
 ### ⚠️ 已知限制
 
-1. **抖音链接解析**
-   - 受严格反爬虫机制限制
-   - 即使有Cookie也可能被拦截
-   - **建议方案**：使用浏览器扩展下载后上传
-
-2. **TikTokDownloader**
-   - 项目代码存在语法兼容性问题
-   - 暂时无法直接导入使用
-   - 已提供 yt-dlp 作为替代方案
+1. **平台风控**
+   - 受平台策略影响，部分链接可能需要 Chrome 已登录
+   - yt-dlp 规则需要定期升级
 
 ### 📝 使用建议
 
@@ -93,9 +79,9 @@ Python升级指南.md              # 详细升级文档
    浏览器扩展下载视频 → 上传到工具 → 自动转录 + AI摘要
    ```
 
-2. **方式B：直接链接解析（小红书）** ⭐⭐⭐
+2. **方式B：直接链接解析** ⭐⭐⭐⭐
    ```
-   粘贴小红书链接 → 自动解析下载 → 转录 + AI摘要
+   粘贴视频链接 → yt-dlp 自动下载 → 转录 + AI摘要
    ```
 
 3. **方式C：音频处理** ⭐⭐⭐⭐
@@ -125,7 +111,7 @@ Python升级指南.md              # 详细升级文档
 
 ### 🎯 后续计划
 
-- [ ] 优化抖音解析（研究更好的反爬虫绕过方案）
+- [ ] 优化 yt-dlp 版本检查和自动升级提示
 - [ ] 支持更多视频平台
 - [ ] 添加字幕导出功能
 - [ ] 实现视频预览

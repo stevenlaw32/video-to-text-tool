@@ -2,78 +2,83 @@ let uploadedFiles = [];
 let combinedTranscript = '';
 let aiSummary = '';
 let folderName = '';
-let customPromptText = ''; // 从API配置中加载
+let customPromptText = ''; // 从 API配置中加载
+let mergeOutput = true; // 输出方式：合并 or 分开
+window.linkDownloadedVideos = window.linkDownloadedVideos || {};
+
+// 输出方式切换
+function setOutputMode(mode) {
+    mergeOutput = (mode === 'merge');
+    const mergeBtn = document.getElementById('mergeBtn');
+    const splitBtn = document.getElementById('splitBtn');
+    if (mergeOutput) {
+        mergeBtn.className = 'flex-1 py-2 font-medium bg-indigo-600 text-white transition-colors';
+        splitBtn.className = 'flex-1 py-2 font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors';
+    } else {
+        mergeBtn.className = 'flex-1 py-2 font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors';
+        splitBtn.className = 'flex-1 py-2 font-medium bg-indigo-600 text-white transition-colors';
+    }
+}
 
 // 处理模式切换
 function toggleProcessingMode() {
     const mode = document.getElementById('processingMode').value;
     const whisperSettings = document.getElementById('whisperSettings');
     const ocrSettings = document.getElementById('ocrSettings');
-    
+    const hybridSettings = document.getElementById('hybridSettings');
+
+    // 先全部隐藏
+    whisperSettings.classList.add('hidden');
+    ocrSettings.classList.add('hidden');
+    hybridSettings.classList.add('hidden');
+
     if (mode === 'ocr') {
-        // OCR 模式：隐藏 Whisper 设置，显示 OCR 说明
-        whisperSettings.classList.add('hidden');
         ocrSettings.classList.remove('hidden');
-    } else {
-        // Auto 或 Whisper 模式：显示 Whisper 设置，隐藏 OCR 说明
+    } else if (mode === 'hybrid') {
+        // 混合模式：显示 Whisper 设置（可调模型/语言）+ 混合说明
         whisperSettings.classList.remove('hidden');
-        ocrSettings.classList.add('hidden');
+        hybridSettings.classList.remove('hidden');
+    } else {
+        // auto / whisper
+        whisperSettings.classList.remove('hidden');
     }
 }
 
 // 默认提示词（仅用于后端，前端从API配置读取）
-const DEFAULT_PROMPT = `请你扮演一名"课程笔记精简&排版编辑"，对我提供的 Markdown 课程文档进行重排、精简和结构优化。要求如下：
+// 注意：不含 {transcript} 占位符，后端会自动追加转录内容
+const DEFAULT_PROMPT = `# Role
+你是一位精通多领域知识建模的"深度内容架构师"。你的任务是将视频转录文本（ASR）加工成一份逻辑严密、细节丰满、且具备极高可读性的 Markdown 深度笔记。
 
-## 整体风格
-- 保留所有核心观点和方法论，删除或压缩废话、营销语、重复说明
-- 风格偏向知识笔记/复习大纲，而不是长篇教程文案
-- 语言简洁、直接，句子能短就短
+# Core Objective
+**信息无损还原**：让从未看过原视频的读者，通过阅读本文档，能完全掌握视频中的核心逻辑、具体方法论、生动案例以及所有的关键细节，严禁过度简化。
 
-## 结构调整
-用少量清晰的一级、二级标题组织内容，例如：
-- 一、课程主题/正确认知
-- 二、核心目标/根本目的
-- 三、常见错误或禁忌
-- 四、核心方法/技巧
-- 五、练习与作业/实战
+# Task Goals
+1. **拒绝干条目**：不仅记录结论，更要保留得出结论的推导过程、背景原因、以及博主使用的类比和例子。
+2. **场景与细节复刻**：保留视频中提及的具体参数（如数值、设置）、具体话术（如交友/职场沟通）、以及具体的合规/避坑细节。
+3. **结构化重组**：打破零散的口语顺序，按照最符合认知逻辑的结构重新组织内容。
 
-要求：
-- 尽量合并重复或碎片化的小节，避免"第一节/第二节/第三节"式的细碎结构，如果内容相近就归为同一大块
-- 保持目录层级不超过2-3级，避免过深的标题嵌套
+# Processing Logic (Adaptive)
+请根据输入内容的本质属性，自动匹配最佳逻辑框架：
 
-## 内容精简方式
-- 将能列表化的内容，尽量改成有条理的项目符号或编号列表
-- 同一意思只保留一次表达：若原文在不同小节重复同一个观点，合并到一个地方，用1-2句说清
-- 删除或压缩以下内容：
-  - 过度铺陈、空话和情绪化语句（如"通过本课程你将能够……"之类）
-  - 冗长的过渡句、赘述的"背景介绍"
-  - 过多、类似的例子，只保留最典型1-2个
+1. **【决策/合规/策略类】（侧重逻辑与方案）**：
+   - 框架：背景趋势 -> 核心痛点/风险分析 -> 深度解决方案（分点详述） -> 实施建议/风险规避。
+2. **【理论/体系/心理类】（侧重概念与理解）**：
+   - 框架：核心概念界定 -> 底层原理/逻辑拆解（保留生动类比） -> 现实应用场景 -> 认知升级/延伸思考。
+3. **【技能/实操/方法类】（侧重动作与流程）**：
+   - 框架：目标设定 -> 详细分步拆解（含操作要点） -> 关键细节/常见错误 -> 进阶技巧/复盘建议。
+4. **【观点/启发/思维类】（侧重洞察与改变）**：
+   - 框架：现状观察/痛点挖掘 -> 核心思维转折点 -> 行动指南/具体建议 -> 价值升华/金句提炼。
 
-## 重点呈现方式
-- 用粗体强调关键概念和步骤（例如：**发散性思维**、**平移思维**、**需求感过强**）
-- 对"方法/技巧"类内容，用清晰的结构呈现：
-  1. 定义
-  2. 使用步骤
-  3. 示例
-  4. 适用场景/注意点（如果原文有）
-- 对"禁忌/错误"类内容，整合成一个汇总列表，避免散落多处重复说
+# Content Requirements (Rich & Descriptive)
+- **多级标题**：严禁结构扁平。必须根据内容复杂度灵活使用 \`##\`, \`###\`, 甚至 \`####\` 来构建知识索引。
+- **案例扩充**：若视频中提到案例、实验或故事，请详细描述其过程、转折和结论，使其具备"故事性"和"说服力"。
+- **解释性写作**：保留博主对专业术语的通俗化解释，确保文档对"门外汉"友好。
+- **模块化总结**：在每一个二级标题（##）的末尾，添加一个引用块：
+  > **💡 核心萃取：** [用一句话提炼本章节的底层逻辑或核心价值，必须具备启发性]
 
-## 示例与比喻
-- 保留有助理解的例子和比喻，但删除明显重复或价值不高的例子
-- 示例尽量简短，能用1-2条对话或一个场景说明的，不拉长叙述
-
-## 练习与作业部分
-- 独立成一个"练习/作业/实战应用"模块
-- 用列表列出具体要做的事情和频次（如"每天练习20个关键词"），方便执行和回顾
-
-## 输出格式
-- 只输出修改后的整篇Markdown文本，不需要解释，不要加无关前后缀
-- 保持语种和原文一致（原文是中文就全中文）
-
-转录文本：
-{transcript}
-
-请开始整理：`;
+# Tone & Style
+- 风格：客观、详尽、富有条理。
+- 目标：将"碎片化的口语"转化为"系统化的书面知识体系"。`;
 
 // 中文数字转阿拉伯数字
 function chineseToNumber(str) {
@@ -447,7 +452,8 @@ async function startProcessing() {
                 whisper_language: whisperLanguage,
                 model_alias: modelAlias,
                 custom_prompt: customPromptText,
-                enable_ai_summary: enableAI
+                enable_ai_summary: enableAI,
+                merge_output: mergeOutput
             })
         });
         
@@ -467,51 +473,59 @@ async function startProcessing() {
             
             combinedTranscript = data.combined_transcript;
             transcriptResult.textContent = combinedTranscript;
-            
-            if (enableAI && data.ai_summary) {
-                // 阶段5: AI 整理 (75-95%)
+
+            const splitSummarySection = document.getElementById('splitSummarySection');
+
+            if (enableAI && (data.ai_summary || data.individual_results)) {
                 addLog('═'.repeat(50), 'header');
-                addLog('🤖 开始 AI 智能整理', 'header');
-                addLog(`   模型: ${modelAlias}`, 'info');
-                
-                updateProgress(
-                    75,
-                    '🤖 AI 智能整理',
-                    `使用 ${modelAlias} 模型生成摘要...`,
-                    '正在分析转录内容并生成结构化文档'
-                );
-                
-                addLog('📡 正在调用 AI API...', 'info');
+                addLog('🤖 AI 整理完成', 'header');
+
+                updateProgress(75, '🤖 AI 智能整理', `使用 ${modelAlias} 模型生成摘要...`, '正在分析转录内容');
                 await new Promise(resolve => setTimeout(resolve, 500));
-                
-                updateProgress(
-                    85,
-                    '🤖 AI 处理中',
-                    '生成章节标题和要点提取...',
-                    '优化文档结构和格式'
-                );
-                
-                aiSummary = data.ai_summary;
-                summaryResult.innerHTML = marked.parse(aiSummary);
-                summarySection.classList.remove('hidden');
-                
-                addLog('✓ AI 摘要生成完成', 'success');
-                addLog(`   摘要长度: ${data.ai_summary.length} 字符`, 'success');
-                
-                updateProgress(
-                    95,
-                    '✓ AI 摘要完成',
-                    '文档整理和格式化已完成',
-                    '准备展示结果'
-                );
+                updateProgress(85, '🤖 AI 处理中', '生成章节标题和要点提取...', '优化文档结构和格式');
+
+                if (data.individual_results) {
+                    // 分开模式：渲染多张摘要卡片
+                    summarySection.classList.add('hidden');
+                    splitSummarySection.innerHTML = data.individual_results.map((item, idx) => `
+                        <div class="bg-white rounded-2xl shadow-xl p-6">
+                            <div class="flex justify-between items-center mb-3">
+                                <h3 class="text-base font-semibold text-gray-800">
+                                    <i class="fas fa-film mr-2 text-indigo-500"></i>
+                                    <span class="text-indigo-600 mr-2">[${idx + 1}]</span>${item.name}
+                                </h3>
+                                <div class="flex space-x-2">
+                                    <button onclick="copySplitSummary(${idx}, event)" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                        <i class="fas fa-copy mr-1"></i>复制
+                                    </button>
+                                    <button onclick="downloadSplitSummary(${idx}, '${item.name}')" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                        <i class="fas fa-download mr-1"></i>下载
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="prose max-w-none bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto split-summary-content">
+                                ${marked.parse(item.ai_summary || '\u65e0内容')}
+                            </div>
+                        </div>
+                    `).join('');
+                    splitSummarySection.classList.remove('hidden');
+                    // 保存到全局以供复制/下载使用
+                    window._splitResults = data.individual_results;
+                    addLog(`✓ ${data.individual_results.length} 个视频摄要分别生成完成`, 'success');
+                } else {
+                    // 合并模式：单一摘要
+                    splitSummarySection.classList.add('hidden');
+                    aiSummary = data.ai_summary;
+                    summaryResult.innerHTML = marked.parse(aiSummary);
+                    summarySection.classList.remove('hidden');
+                    addLog(`✓ AI 摘要生成完成，共 ${data.ai_summary.length} 字符`, 'success');
+                }
+
+                updateProgress(95, '✓ AI 摘要完成', '文档整理和格式化已完成', '准备展示结果');
             } else {
                 summarySection.classList.add('hidden');
-                updateProgress(
-                    90,
-                    '⏭️ 跳过 AI 整理',
-                    '已禁用 AI 摘要功能',
-                    '准备展示转录结果'
-                );
+                splitSummarySection.classList.add('hidden');
+                updateProgress(90, '⏭️ 跳过 AI 整理', '已禁用 AI 摘要功能', '准备展示转录结果');
             }
             
             // 阶段6: 保存结果 (95-100%)
@@ -734,6 +748,39 @@ function downloadText(type) {
     a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+}
+
+function downloadSplitSummary(idx, name) {
+    const results = window._splitResults;
+    if (!results || !results[idx]) return;
+    const content = results[idx].ai_summary || '';
+    const safeName = name.replace(/[\\/:*?"<>|]/g, '_').replace(/\.[^.]+$/, '');
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AI摘要_${safeName}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+async function copySplitSummary(idx, event) {
+    const results = window._splitResults;
+    if (!results || !results[idx]) return;
+    const content = results[idx].ai_summary || '';
+    try {
+        await navigator.clipboard.writeText(content);
+        const button = event.target.closest('button');
+        const originalHTML = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check mr-1"></i>已复制';
+        button.classList.add('text-green-600');
+        setTimeout(() => {
+            button.innerHTML = originalHTML;
+            button.classList.remove('text-green-600');
+        }, 2000);
+    } catch (err) {
+        alert('复制失败，请手动复制');
+    }
 }
 
 async function copyText(type, event) {
@@ -990,26 +1037,436 @@ async function shutdownServer() {
     }
 }
 
+// ==================== 文本总结功能 ====================
+let docFiles = [];          // 上传的原始 File 对象
+let docExtracted = [];      // [{name, text, charCount, status, error}]
+let docMergeMode = true;
+let docSummaryText = '';    // 合并模式的结果
+let docSplitSummaries = []; // 分开模式的结果 [{name, summary}]
+let docProcessing = false;
+
+// 初始化文档上传区
+document.addEventListener('DOMContentLoaded', function() {
+    const docDrop = document.getElementById('docDropZone');
+    const docInput = document.getElementById('docFileInput');
+    if (!docDrop || !docInput) return;
+
+    docDrop.addEventListener('click', () => docInput.click());
+    docInput.addEventListener('change', (e) => handleDocFiles(Array.from(e.target.files)));
+
+    docDrop.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        docDrop.classList.add('border-indigo-500', 'bg-indigo-50');
+    });
+    docDrop.addEventListener('dragleave', () => {
+        docDrop.classList.remove('border-indigo-500', 'bg-indigo-50');
+    });
+    docDrop.addEventListener('drop', (e) => {
+        e.preventDefault();
+        docDrop.classList.remove('border-indigo-500', 'bg-indigo-50');
+        handleDocFiles(Array.from(e.dataTransfer.files));
+    });
+
+    // 加载模型列表到 docAiModel
+    loadDocModelList();
+});
+
+async function loadDocModelList() {
+    try {
+        const resp = await fetch('/api/models/list');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const sel = document.getElementById('docAiModel');
+        if (!sel || !data.models) return;
+        data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.alias;
+            opt.textContent = `${m.alias} (${m.model_name})`;
+            sel.appendChild(opt);
+        });
+    } catch(e) { console.error('加载模型列表失败:', e); }
+}
+
+function handleDocFiles(files) {
+    const allowedExts = ['pdf', 'doc', 'docx', 'md', 'txt'];
+    files.forEach(f => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        if (allowedExts.includes(ext)) docFiles.push(f);
+    });
+    updateDocFileList();
+    updateDocStats();
+    document.getElementById('docSummaryBtn').disabled = docFiles.length === 0;
+}
+
+function getDocIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    switch(ext) {
+        case 'pdf': return '<i class="fas fa-file-pdf text-red-500"></i>';
+        case 'doc': case 'docx': return '<i class="fas fa-file-word text-blue-500"></i>';
+        case 'md': return '<i class="fab fa-markdown text-gray-600"></i>';
+        default: return '<i class="fas fa-file-alt text-gray-500"></i>';
+    }
+}
+
+function updateDocFileList() {
+    const list = document.getElementById('docFileList');
+    const count = document.getElementById('docFileCount');
+    count.textContent = `(${docFiles.length} \u4e2a\u6587\u4ef6)`;
+
+    if (docFiles.length === 0) {
+        list.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="fas fa-inbox text-4xl mb-2"></i><p class="text-sm">\u6682\u65e0\u6587\u6863\uff0c\u8bf7\u4e0a\u4f20\u6587\u4ef6</p></div>';
+        return;
+    }
+
+    list.innerHTML = docFiles.map((file, idx) => {
+        const ex = docExtracted.find(d => d.fileIndex === idx);
+        const status = ex ? ex.status : 'pending';
+        let statusIcon = '<i class="fas fa-clock text-gray-400"></i>';
+        let bg = 'bg-gray-50';
+        if (status === 'extracted') { statusIcon = '<i class="fas fa-check-circle text-green-500"></i>'; bg = 'bg-green-50 border border-green-200'; }
+        else if (status === 'failed') { statusIcon = '<i class="fas fa-exclamation-circle text-red-500"></i>'; bg = 'bg-red-50 border border-red-200'; }
+        else if (status === 'summarizing') { statusIcon = '<i class="fas fa-spinner fa-spin text-blue-500"></i>'; bg = 'bg-blue-50 border border-blue-200'; }
+
+        let errorHtml = (status === 'failed' && ex && ex.error) ? `<p class="text-xs text-red-500 mt-1 truncate" title="${ex.error}">${ex.error}</p>` : '';
+        let charInfo = (ex && ex.charCount) ? `<span class="text-xs text-green-600 ml-2">${ex.charCount} \u5b57\u7b26</span>` : '';
+        let removeBtn = !docProcessing ? `<button onclick="removeDocFile(${idx})" class="ml-2 text-red-500 hover:text-red-700" title="\u5220\u9664"><i class="fas fa-times"></i></button>` : '';
+
+        return `<div class="flex items-center justify-between p-3 ${bg} rounded-lg transition-colors">
+            <div class="flex items-center flex-1 min-w-0">
+                <span class="mr-3 text-lg flex-shrink-0">${statusIcon}</span>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-800 truncate">${getDocIcon(file.name)} ${file.name} ${charInfo}</p>
+                    <p class="text-xs text-gray-500">${(file.size / 1024).toFixed(1)} KB</p>
+                    ${errorHtml}
+                </div>
+            </div>
+            <div class="flex items-center flex-shrink-0">${removeBtn}</div>
+        </div>`;
+    }).join('');
+}
+
+function removeDocFile(idx) {
+    const exIdx = docExtracted.findIndex(d => d.fileIndex === idx);
+    if (exIdx !== -1) docExtracted.splice(exIdx, 1);
+    docFiles.splice(idx, 1);
+    docExtracted.forEach(d => { if (d.fileIndex > idx) d.fileIndex--; });
+    updateDocFileList();
+    updateDocStats();
+    document.getElementById('docSummaryBtn').disabled = docFiles.length === 0;
+}
+
+function clearAllDocs() {
+    if (docFiles.length === 0) return;
+    if (!confirm('\u786e\u5b9a\u8981\u6e05\u7a7a\u6240\u6709\u6587\u6863\u5417\uff1f')) return;
+    docFiles = [];
+    docExtracted = [];
+    docSummaryText = '';
+    docSplitSummaries = [];
+    updateDocFileList();
+    updateDocStats();
+    document.getElementById('docSummaryBtn').disabled = true;
+    document.getElementById('docResultSection').classList.add('hidden');
+}
+
+function setDocOutputMode(mode) {
+    docMergeMode = (mode === 'merge');
+    const mb = document.getElementById('docMergeBtn');
+    const sb = document.getElementById('docSplitBtn');
+    if (docMergeMode) {
+        mb.className = 'flex-1 py-2 font-medium bg-indigo-600 text-white transition-colors text-sm';
+        sb.className = 'flex-1 py-2 font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm';
+    } else {
+        mb.className = 'flex-1 py-2 font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm';
+        sb.className = 'flex-1 py-2 font-medium bg-indigo-600 text-white transition-colors text-sm';
+    }
+}
+
+function updateDocStats() {
+    const total = docFiles.length;
+    const extracted = docExtracted.filter(d => d.status === 'extracted').length;
+    const failed = docExtracted.filter(d => d.status === 'failed').length;
+    const chars = docExtracted.filter(d => d.status === 'extracted').reduce((s, d) => s + (d.charCount || 0), 0);
+
+    document.getElementById('docStatTotal').textContent = total;
+    document.getElementById('docStatExtracted').textContent = extracted;
+    document.getElementById('docStatChars').textContent = chars.toLocaleString();
+    document.getElementById('docStatFailed').textContent = failed;
+
+    const bar = document.getElementById('docProgressBar');
+    const txt = document.getElementById('docProgressText');
+    if (bar && total > 0) {
+        const pct = Math.round(((extracted + failed) / total) * 100);
+        bar.style.width = pct + '%';
+        bar.className = 'h-full rounded-full transition-all duration-300 ' +
+            (failed > 0 && extracted === 0 ? 'bg-red-500' : failed > 0 ? 'bg-yellow-500' : 'bg-green-500');
+        if (txt) txt.textContent = `${extracted + failed} / ${total}` + (failed > 0 ? ` (${failed} \u5931\u8d25)` : '');
+    } else if (bar) {
+        bar.style.width = '0%';
+        if (txt) txt.textContent = '';
+    }
+}
+
+// ── 文档日志 SSE ──
+let docEventSource = null;
+
+function connectDocLogStream() {
+    if (docEventSource) docEventSource.close();
+    const logSection = document.getElementById('docLogSection');
+    logSection.classList.remove('hidden');
+
+    docEventSource = new EventSource('/api/text_summary/stream_logs');
+    docEventSource.onmessage = function(event) {
+        const log = JSON.parse(event.data);
+        addDocLog(log.message, log.type);
+    };
+    docEventSource.onerror = function() {
+        if (docEventSource) { docEventSource.close(); docEventSource = null; }
+    };
+}
+
+function disconnectDocLogStream() {
+    if (docEventSource) { docEventSource.close(); docEventSource = null; }
+}
+
+function addDocLog(message, type) {
+    const container = document.getElementById('docLogContainer');
+    const line = document.createElement('div');
+    line.className = 'py-0.5';
+
+    const colors = {
+        'header': 'text-yellow-400 font-bold',
+        'success': 'text-green-400',
+        'error': 'text-red-400',
+        'warning': 'text-yellow-300',
+        'info': 'text-gray-300'
+    };
+    line.innerHTML = `<span class="${colors[type] || colors.info}">${message}</span>`;
+    container.appendChild(line);
+    container.scrollTop = container.scrollHeight;
+}
+
+function clearDocLog() {
+    document.getElementById('docLogContainer').innerHTML = '';
+}
+
+async function startDocSummary() {
+    if (docFiles.length === 0) return;
+
+    docProcessing = true;
+    const btn = document.getElementById('docSummaryBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>\u4e0a\u4f20\u6587\u6863\u4e2d...';
+
+    // Show & clear log
+    clearDocLog();
+    document.getElementById('docLogSection').classList.remove('hidden');
+
+    // Step 1: Upload all files to extract text
+    const extractMode = document.getElementById('docExtractMode').value;
+    addDocLog(`\u{1F4E4} \u5F00\u59CB\u4E0A\u4F20\u6587\u6863... (\u63D0\u53D6\u65B9\u5F0F: ${extractMode})`, 'info');
+    const formData = new FormData();
+    docFiles.forEach(f => formData.append('files', f));
+    formData.append('extract_mode', extractMode);
+
+    try {
+        const uploadResp = await fetch('/api/text_summary/upload', {
+            method: 'POST',
+            body: formData
+        });
+        const uploadData = await uploadResp.json();
+        if (!uploadData.success) {
+            addDocLog('\u274C \u4E0A\u4F20\u5931\u8D25: ' + (uploadData.error || ''), 'error');
+            alert('\u4e0a\u4f20\u5931\u8d25: ' + (uploadData.error || '\u672a\u77e5\u9519\u8bef'));
+            resetDocBtn();
+            return;
+        }
+
+        // Update extracted status
+        docExtracted = [];
+        uploadData.files.forEach((f, i) => {
+            docExtracted.push({
+                fileIndex: i,
+                name: f.name,
+                text: f.text || '',
+                charCount: f.char_count || 0,
+                status: f.success ? 'extracted' : 'failed',
+                error: f.error || null
+            });
+            if (f.success) {
+                addDocLog(`\u2713 ${f.name} \u2014 ${f.char_count} \u5B57\u7B26`, 'success');
+            } else {
+                addDocLog(`\u274C ${f.name} \u2014 ${f.error || '\u63D0\u53D6\u5931\u8D25'}`, 'error');
+            }
+        });
+        addDocLog(`\u{1F4CA} \u6587\u672C\u63D0\u53D6\u5B8C\u6210\uFF1A\u6210\u529F ${uploadData.succeeded} / \u5931\u8D25 ${uploadData.failed}`, 'info');
+        updateDocFileList();
+        updateDocStats();
+
+        const successDocs = docExtracted.filter(d => d.status === 'extracted');
+        if (successDocs.length === 0) {
+            addDocLog('\u274C \u6240\u6709\u6587\u6863\u63D0\u53D6\u5931\u8D25\uFF0C\u65E0\u6CD5\u7EE7\u7EED', 'error');
+            alert('\u6240\u6709\u6587\u6863\u63d0\u53d6\u5931\u8d25\uff0c\u65e0\u6cd5\u7ee7\u7eed');
+            resetDocBtn();
+            return;
+        }
+
+        // Step 2: Connect log stream, then call AI
+        btn.innerHTML = '<i class="fas fa-brain fa-spin mr-2"></i>AI \u6574\u7406\u4e2d...';
+        connectDocLogStream();
+
+        const modelAlias = document.getElementById('docAiModel').value;
+        const sumResp = await fetch('/api/text_summary/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                documents: successDocs.map(d => ({ name: d.name, text: d.text })),
+                model_alias: modelAlias,
+                custom_prompt: customPromptText,
+                merge: docMergeMode
+            })
+        });
+        const sumData = await sumResp.json();
+        disconnectDocLogStream();
+
+        if (!sumData.success) {
+            addDocLog('\u274C AI \u5904\u7406\u5931\u8D25: ' + (sumData.error || ''), 'error');
+            alert('AI \u5904\u7406\u5931\u8d25: ' + (sumData.error || '\u672a\u77e5\u9519\u8bef'));
+            resetDocBtn();
+            return;
+        }
+
+        // Step 3: Show results
+        const resultSection = document.getElementById('docResultSection');
+        const mergedDiv = document.getElementById('docMergedResult');
+        const splitDiv = document.getElementById('docSplitResults');
+
+        resultSection.classList.remove('hidden');
+
+        if (sumData.mode === 'merge') {
+            docSummaryText = sumData.summary;
+            document.getElementById('docMergedContent').innerHTML = marked.parse(docSummaryText);
+            mergedDiv.classList.remove('hidden');
+            splitDiv.classList.add('hidden');
+        } else {
+            docSplitSummaries = sumData.results;
+            mergedDiv.classList.add('hidden');
+            splitDiv.innerHTML = sumData.results.map((item, idx) => `
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-base font-semibold text-gray-800">
+                            <i class="fas fa-file-alt mr-2 text-indigo-500"></i>
+                            <span class="text-indigo-600 mr-2">[${idx+1}]</span>${item.name}
+                        </h3>
+                        <div class="flex space-x-2">
+                            <button onclick="copyDocSplitSummary(${idx}, event)" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                <i class="fas fa-copy mr-1"></i>\u590d\u5236
+                            </button>
+                            <button onclick="downloadDocSplitSummary(${idx})" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                <i class="fas fa-download mr-1"></i>\u4e0b\u8f7d
+                            </button>
+                        </div>
+                    </div>
+                    <div class="prose max-w-none bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto text-sm">
+                        ${item.success ? marked.parse(item.summary) : '<p class="text-red-500">\u5904\u7406\u5931\u8d25: ' + (item.error || '') + '</p>'}
+                    </div>
+                </div>
+            `).join('');
+            splitDiv.classList.remove('hidden');
+        }
+
+        // Update progress to 100%
+        const bar = document.getElementById('docProgressBar');
+        bar.style.width = '100%';
+        bar.className = 'h-full rounded-full transition-all duration-300 bg-green-500';
+        document.getElementById('docProgressText').textContent = '\u5b8c\u6210';
+
+    } catch (error) {
+        disconnectDocLogStream();
+        console.error('\u6587\u672c\u603b\u7ed3\u5931\u8d25:', error);
+        addDocLog('\u274C \u5904\u7406\u5931\u8D25: ' + error.message, 'error');
+        alert('\u5904\u7406\u5931\u8d25: ' + error.message);
+    }
+
+    resetDocBtn();
+}
+
+function resetDocBtn() {
+    docProcessing = false;
+    const btn = document.getElementById('docSummaryBtn');
+    btn.disabled = docFiles.length === 0;
+    btn.innerHTML = '<i class="fas fa-brain mr-2"></i>\u5f00\u59cb\u603b\u7ed3';
+}
+
+async function copyDocSummary(event) {
+    if (!docSummaryText) return;
+    try {
+        await navigator.clipboard.writeText(docSummaryText);
+        const button = event.target.closest('button');
+        const orig = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check mr-1"></i>\u5df2\u590d\u5236';
+        button.classList.add('text-green-600');
+        setTimeout(() => { button.innerHTML = orig; button.classList.remove('text-green-600'); }, 2000);
+    } catch(e) { alert('\u590d\u5236\u5931\u8d25'); }
+}
+
+function downloadDocSummary() {
+    if (!docSummaryText) return;
+    const blob = new Blob([docSummaryText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'AI\u6587\u6863\u603b\u7ed3.md';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+async function copyDocSplitSummary(idx, event) {
+    if (!docSplitSummaries[idx] || !docSplitSummaries[idx].summary) return;
+    try {
+        await navigator.clipboard.writeText(docSplitSummaries[idx].summary);
+        const button = event.target.closest('button');
+        const orig = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check mr-1"></i>\u5df2\u590d\u5236';
+        button.classList.add('text-green-600');
+        setTimeout(() => { button.innerHTML = orig; button.classList.remove('text-green-600'); }, 2000);
+    } catch(e) { alert('\u590d\u5236\u5931\u8d25'); }
+}
+
+function downloadDocSplitSummary(idx) {
+    if (!docSplitSummaries[idx] || !docSplitSummaries[idx].summary) return;
+    const item = docSplitSummaries[idx];
+    const safeName = item.name.replace(/[\\/:*?"<>|]/g, '_').replace(/\.[^.]+$/, '');
+    const blob = new Blob([item.summary], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AI\u603b\u7ed3_${safeName}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
 // ==================== TAB 切换功能 ====================
 function switchTab(tabName) {
     const videoTab = document.getElementById('videoTab');
     const audioTab = document.getElementById('audioTab');
     const linkTab = document.getElementById('linkTab');
+    const textSummaryTab = document.getElementById('textSummaryTab');
     const videoContent = document.getElementById('videoTabContent');
     const audioContent = document.getElementById('audioTabContent');
     const linkContent = document.getElementById('linkTabContent');
-    
+    const textSummaryContent = document.getElementById('textSummaryTabContent');
+
     // 重置所有TAB样式
-    [videoTab, audioTab, linkTab].forEach(tab => {
+    [videoTab, audioTab, linkTab, textSummaryTab].forEach(tab => {
         tab.classList.remove('border-indigo-600', 'text-indigo-600');
         tab.classList.add('border-transparent', 'text-gray-600');
     });
-    
+
     // 隐藏所有内容
-    [videoContent, audioContent, linkContent].forEach(content => {
+    [videoContent, audioContent, linkContent, textSummaryContent].forEach(content => {
         content.classList.add('hidden');
     });
-    
+
     // 激活选中的TAB
     if (tabName === 'video') {
         videoTab.classList.add('border-indigo-600', 'text-indigo-600');
@@ -1023,12 +1480,17 @@ function switchTab(tabName) {
         linkTab.classList.add('border-indigo-600', 'text-indigo-600');
         linkTab.classList.remove('border-transparent', 'text-gray-600');
         linkContent.classList.remove('hidden');
+    } else if (tabName === 'textSummary') {
+        textSummaryTab.classList.add('border-indigo-600', 'text-indigo-600');
+        textSummaryTab.classList.remove('border-transparent', 'text-gray-600');
+        textSummaryContent.classList.remove('hidden');
     }
 }
 
 // ==================== 音频提取功能 ====================
 let audioFiles = [];
 let extractedAudioFiles = [];
+let audioExtractionRunning = false;
 
 // 初始化音频提取功能
 document.addEventListener('DOMContentLoaded', function() {
@@ -1076,47 +1538,97 @@ function handleAudioFiles(files) {
     updateAudioStats();
 }
 
+function getStatusIcon(status) {
+    switch (status) {
+        case 'pending': return '<i class="fas fa-clock text-gray-400"></i>';
+        case 'processing': return '<i class="fas fa-spinner fa-spin text-blue-500"></i>';
+        case 'completed': return '<i class="fas fa-check-circle text-green-500"></i>';
+        case 'failed': return '<i class="fas fa-exclamation-circle text-red-500"></i>';
+        default: return '<i class="fas fa-file-video text-indigo-600"></i>';
+    }
+}
+
+function getStatusBg(status) {
+    switch (status) {
+        case 'processing': return 'bg-blue-50 border border-blue-200';
+        case 'completed': return 'bg-green-50 border border-green-200';
+        case 'failed': return 'bg-red-50 border border-red-200';
+        default: return 'bg-gray-50';
+    }
+}
+
 function updateAudioFileList() {
     const fileList = document.getElementById('audioFileList');
     const fileCount = document.getElementById('audioFileCount');
     
-    fileCount.textContent = `(${audioFiles.length} 个文件)`;
+    fileCount.textContent = `(${audioFiles.length} \u4e2a\u6587\u4ef6)`;
     
     if (audioFiles.length === 0) {
         fileList.innerHTML = `
             <div class="text-center py-8 text-gray-400">
                 <i class="fas fa-inbox text-4xl mb-2"></i>
-                <p class="text-sm">暂无文件，请上传视频</p>
+                <p class="text-sm">\u6682\u65e0\u6587\u4ef6\uff0c\u8bf7\u4e0a\u4f20\u89c6\u9891</p>
             </div>
         `;
         return;
     }
     
-    fileList.innerHTML = audioFiles.map((file, index) => `
-        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+    fileList.innerHTML = audioFiles.map((file, index) => {
+        const extracted = extractedAudioFiles.find(f => f.fileIndex === index);
+        const status = extracted ? extracted.status : 'pending';
+        const statusIcon = getStatusIcon(extracted ? status : null);
+        const statusBg = extracted ? getStatusBg(status) : 'bg-gray-50';
+        
+        let actionBtn = '';
+        if (!audioExtractionRunning) {
+            if (status === 'failed') {
+                actionBtn = `<button onclick="retryAudioFile(${index})" class="ml-2 text-orange-500 hover:text-orange-700 text-xs px-2 py-1 rounded bg-orange-50 hover:bg-orange-100" title="\u91cd\u8bd5"><i class="fas fa-redo"></i></button>`;
+            }
+            if (!extracted || status === 'failed') {
+                actionBtn += `<button onclick="removeAudioFile(${index})" class="ml-2 text-red-500 hover:text-red-700" title="\u5220\u9664"><i class="fas fa-times"></i></button>`;
+            }
+        }
+        
+        let errorMsg = '';
+        if (status === 'failed' && extracted && extracted.error) {
+            errorMsg = `<p class="text-xs text-red-500 mt-1 truncate" title="${extracted.error}">${extracted.error}</p>`;
+        }
+        
+        return `
+        <div class="flex items-center justify-between p-3 ${statusBg} rounded-lg transition-colors">
             <div class="flex items-center flex-1 min-w-0">
-                <i class="fas fa-file-video text-indigo-600 mr-3 text-lg"></i>
+                <span class="mr-3 text-lg flex-shrink-0">${statusIcon}</span>
                 <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-gray-800 truncate">${file.name}</p>
                     <p class="text-xs text-gray-500">${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                    ${errorMsg}
                 </div>
             </div>
-            <button onclick="removeAudioFile(${index})" class="ml-3 text-red-600 hover:text-red-800">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-    `).join('');
+            <div class="flex items-center flex-shrink-0">
+                ${actionBtn}
+            </div>
+        </div>`;
+    }).join('');
 }
 
 function removeAudioFile(index) {
+    const extractedIdx = extractedAudioFiles.findIndex(f => f.fileIndex === index);
+    if (extractedIdx !== -1) {
+        extractedAudioFiles.splice(extractedIdx, 1);
+    }
     audioFiles.splice(index, 1);
+    // reindex extractedAudioFiles
+    extractedAudioFiles.forEach(f => {
+        if (f.fileIndex > index) f.fileIndex--;
+    });
     updateAudioFileList();
     updateAudioStats();
+    updateOutputFilesList();
 }
 
 function clearAllAudioFiles() {
     if (audioFiles.length === 0) return;
-    if (confirm('确定要清空所有文件吗？')) {
+    if (confirm('\u786e\u5b9a\u8981\u6e05\u7a7a\u6240\u6709\u6587\u4ef6\u5417\uff1f')) {
         audioFiles = [];
         extractedAudioFiles = [];
         updateAudioFileList();
@@ -1131,68 +1643,159 @@ function updateAudioStats() {
     const completed = extractedAudioFiles.filter(f => f.status === 'completed').length;
     const processing = extractedAudioFiles.filter(f => f.status === 'processing').length;
     const failed = extractedAudioFiles.filter(f => f.status === 'failed').length;
+    const pending = audioFiles.length - extractedAudioFiles.length + extractedAudioFiles.filter(f => f.status === 'pending').length;
     
     document.getElementById('statCompleted').textContent = completed;
     document.getElementById('statProcessing').textContent = processing;
     document.getElementById('statFailed').textContent = failed;
+    
+    // 更新进度条
+    const progressBar = document.getElementById('audioProgressBar');
+    const progressText = document.getElementById('audioProgressText');
+    if (progressBar && audioFiles.length > 0) {
+        const percent = Math.round(((completed + failed) / audioFiles.length) * 100);
+        progressBar.style.width = percent + '%';
+        progressBar.className = 'h-full rounded-full transition-all duration-300 ' + 
+            (failed > 0 && completed === 0 ? 'bg-red-500' : 
+             failed > 0 ? 'bg-yellow-500' : 'bg-green-500');
+        if (progressText) {
+            progressText.textContent = `${completed + failed} / ${audioFiles.length}` + 
+                (failed > 0 ? ` (${failed} \u5931\u8d25)` : '');
+        }
+    } else if (progressBar) {
+        progressBar.style.width = '0%';
+        if (progressText) progressText.textContent = '';
+    }
 }
 
-async function startAudioExtraction() {
-    if (audioFiles.length === 0) {
-        alert('请先上传视频文件');
-        return;
-    }
-    
-    const extractBtn = document.getElementById('extractBtn');
-    extractBtn.disabled = true;
-    extractBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>处理中...';
-    
+async function extractSingleFile(fileIndex) {
+    const file = audioFiles[fileIndex];
     const format = document.getElementById('outputFormat').value;
     const bitrate = document.getElementById('bitrate').value;
     const sampleRate = document.getElementById('sampleRate').value;
     
-    for (let i = 0; i < audioFiles.length; i++) {
-        const file = audioFiles[i];
-        const fileInfo = {
+    let fileInfo = extractedAudioFiles.find(f => f.fileIndex === fileIndex);
+    if (!fileInfo) {
+        fileInfo = {
+            fileIndex: fileIndex,
             name: file.name,
             status: 'processing',
-            outputUrl: null
+            outputUrl: null,
+            outputName: null,
+            error: null
         };
         extractedAudioFiles.push(fileInfo);
-        updateAudioStats();
+    } else {
+        fileInfo.status = 'processing';
+        fileInfo.error = null;
+    }
+    
+    updateAudioFileList();
+    updateAudioStats();
+    
+    try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('format', format);
+        formData.append('bitrate', bitrate);
+        formData.append('sample_rate', sampleRate);
         
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('format', format);
-            formData.append('bitrate', bitrate);
-            formData.append('sample_rate', sampleRate);
-            
-            const response = await fetch('/audio/extract', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (response.ok) {
-                const data = await response.json();
+        const response = await fetch('/api/audio/extract_file', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
                 fileInfo.status = 'completed';
                 fileInfo.outputUrl = data.download_url;
                 fileInfo.outputName = data.filename;
             } else {
                 fileInfo.status = 'failed';
+                fileInfo.error = data.error || '\u63d0\u53d6\u5931\u8d25';
             }
-        } catch (error) {
-            console.error('提取失败:', error);
+        } else {
+            let errMsg = `HTTP ${response.status}`;
+            try {
+                const errData = await response.json();
+                errMsg = errData.error || errMsg;
+            } catch(e) {}
             fileInfo.status = 'failed';
+            fileInfo.error = errMsg;
         }
-        
-        updateAudioStats();
-        updateOutputFilesList();
+    } catch (error) {
+        console.error('\u63d0\u53d6\u5931\u8d25:', error);
+        fileInfo.status = 'failed';
+        fileInfo.error = error.message || '\u7f51\u7edc\u9519\u8bef';
     }
     
+    updateAudioFileList();
+    updateAudioStats();
+    updateOutputFilesList();
+}
+
+async function startAudioExtraction() {
+    if (audioFiles.length === 0) {
+        alert('\u8bf7\u5148\u4e0a\u4f20\u89c6\u9891\u6587\u4ef6');
+        return;
+    }
+    
+    audioExtractionRunning = true;
+    const extractBtn = document.getElementById('extractBtn');
+    extractBtn.disabled = true;
+    extractBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>\u5904\u7406\u4e2d...';
+    document.getElementById('downloadAllBtn').disabled = true;
+    
+    // 找出需要处理的文件（未处理或失败的）
+    const toProcess = [];
+    for (let i = 0; i < audioFiles.length; i++) {
+        const existing = extractedAudioFiles.find(f => f.fileIndex === i);
+        if (!existing || existing.status === 'failed') {
+            toProcess.push(i);
+        }
+    }
+    
+    for (let j = 0; j < toProcess.length; j++) {
+        extractBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>${j + 1} / ${toProcess.length}`;
+        await extractSingleFile(toProcess[j]);
+    }
+    
+    audioExtractionRunning = false;
     extractBtn.disabled = false;
-    extractBtn.innerHTML = '<i class="fas fa-play mr-2"></i>开始提取';
-    document.getElementById('downloadAllBtn').disabled = false;
+    
+    const failed = extractedAudioFiles.filter(f => f.status === 'failed').length;
+    const completed = extractedAudioFiles.filter(f => f.status === 'completed').length;
+    
+    if (failed > 0) {
+        extractBtn.innerHTML = `<i class="fas fa-redo mr-2"></i>\u91cd\u8bd5\u5931\u8d25\u9879 (${failed})`;
+    } else {
+        extractBtn.innerHTML = '<i class="fas fa-play mr-2"></i>\u5f00\u59cb\u63d0\u53d6';
+    }
+    
+    document.getElementById('downloadAllBtn').disabled = completed === 0;
+}
+
+async function retryAudioFile(fileIndex) {
+    audioExtractionRunning = true;
+    const extractBtn = document.getElementById('extractBtn');
+    extractBtn.disabled = true;
+    extractBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>\u91cd\u8bd5\u4e2d...';
+    
+    await extractSingleFile(fileIndex);
+    
+    audioExtractionRunning = false;
+    extractBtn.disabled = false;
+    
+    const failed = extractedAudioFiles.filter(f => f.status === 'failed').length;
+    const completed = extractedAudioFiles.filter(f => f.status === 'completed').length;
+    
+    if (failed > 0) {
+        extractBtn.innerHTML = `<i class="fas fa-redo mr-2"></i>\u91cd\u8bd5\u5931\u8d25\u9879 (${failed})`;
+    } else {
+        extractBtn.innerHTML = '<i class="fas fa-play mr-2"></i>\u5f00\u59cb\u63d0\u53d6';
+    }
+    document.getElementById('downloadAllBtn').disabled = completed === 0;
 }
 
 function updateOutputFilesList() {
@@ -1200,7 +1803,7 @@ function updateOutputFilesList() {
     const completed = extractedAudioFiles.filter(f => f.status === 'completed');
     
     if (completed.length === 0) {
-        outputList.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">暂无输出文件</p>';
+        outputList.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">\u6682\u65e0\u8f93\u51fa\u6587\u4ef6</p>';
         return;
     }
     
@@ -1217,21 +1820,47 @@ function updateOutputFilesList() {
     `).join('');
 }
 
-function downloadAllAudio() {
+async function downloadAllAudio() {
     const completed = extractedAudioFiles.filter(f => f.status === 'completed');
     if (completed.length === 0) {
-        alert('没有可下载的文件');
+        alert('\u6ca1\u6709\u53ef\u4e0b\u8f7d\u7684\u6587\u4ef6');
         return;
     }
     
-    completed.forEach(file => {
-        const a = document.createElement('a');
-        a.href = file.outputUrl;
-        a.download = file.outputName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    });
+    const btn = document.getElementById('downloadAllBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>\u6253\u5305\u4e2d...';
+    
+    try {
+        const filenames = completed.map(f => f.outputName);
+        const response = await fetch('/api/audio/download_zip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filenames })
+        });
+        
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'audio_files.zip';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } else {
+            let errMsg = '\u4e0b\u8f7d\u5931\u8d25';
+            try { const d = await response.json(); errMsg = d.error || errMsg; } catch(e) {}
+            alert(errMsg);
+        }
+    } catch (error) {
+        console.error('\u6279\u91cf\u4e0b\u8f7d\u5931\u8d25:', error);
+        alert('\u6279\u91cf\u4e0b\u8f7d\u5931\u8d25: ' + error.message);
+    }
+    
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-download mr-2"></i>\u6279\u91cf\u4e0b\u8f7d';
 }
 
 // ==================== 视频链接解析功能 ====================
@@ -1365,8 +1994,8 @@ async function downloadVideosOnly(urls) {
         `;
         
         try {
-            // 调用后端API解析链接
-            const response = await fetch('/api/video-link/parse', {
+            // 调用后端 API，用 yt-dlp 在服务端完成下载
+            const response = await fetch('/api/video-link/download', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ url: url })
@@ -1375,74 +2004,47 @@ async function downloadVideosOnly(urls) {
             const result = await response.json();
             
             if (result.success) {
-                // 解析成功，触发下载
-                const videoUrl = result.video_url;
                 const title = result.title || '视频';
+                const author = result.author || '未知';
                 const platform = result.platform || 'video';
+                const downloadUrl = result.download_url;
+                window.linkDownloadedVideos[resultId] = {
+                    filename: result.download_filename,
+                    title,
+                    author,
+                    platform,
+                    source_url: result.source_url || url
+                };
                 
-                // 更新状态为下载中
                 document.getElementById(resultId).innerHTML = `
-                    <div class="flex items-center justify-between">
-                        <div class="flex-1">
-                            <p class="font-medium text-gray-800">${title}</p>
-                            <p class="text-xs text-gray-500 mt-1">平台: ${platform}</p>
-                        </div>
-                        <div class="ml-4">
-                            <i class="fas fa-download text-blue-600"></i>
-                        </div>
-                    </div>
-                    <div class="mt-2 text-sm text-blue-600">
-                        <i class="fas fa-info-circle mr-1"></i>开始下载...
-                    </div>
-                `;
-                
-                // 触发浏览器下载
-                const a = document.createElement('a');
-                a.href = videoUrl;
-                a.download = `${platform}_${title}.mp4`;
-                a.target = '_blank';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                
-                // 更新为完成状态
-                setTimeout(() => {
-                    document.getElementById(resultId).innerHTML = `
-                        <div class="flex items-center justify-between">
+                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
                             <div class="flex-1">
-                                <p class="font-medium text-gray-800">${title}</p>
-                                <p class="text-xs text-gray-500 mt-1">平台: ${platform}</p>
+                                <p class="font-semibold text-gray-800">${title}</p>
+                                <p class="text-sm text-gray-600 mt-1">作者: ${author} | 平台: ${platform}</p>
                             </div>
                             <div class="ml-4">
-                                <i class="fas fa-check-circle text-green-600"></i>
+                                <i class="fas fa-check-circle text-green-600 text-2xl"></i>
                             </div>
                         </div>
                         <div class="mt-2 text-sm text-green-600">
-                            <i class="fas fa-check mr-1"></i>已发送到下载文件夹
+                            <i class="fas fa-check mr-1"></i>视频已下载，可继续转录或保存到本机
                         </div>
-                    `;
-                }, 1000);
+                        <div class="mt-3 flex flex-wrap gap-2">
+                            <button onclick="transcribeDownloadedVideo('${resultId}')" class="inline-flex items-center px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                                <i class="fas fa-file-alt mr-1"></i>转录文本
+                            </button>
+                            ${downloadUrl ? `
+                                <a href="${downloadUrl}" download class="inline-flex items-center px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700">
+                                    <i class="fas fa-download mr-1"></i>保存到本机
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
                 
             } else {
-                // 解析失败 - 提供详细的错误信息和解决方案
                 const errorMsg = result.error || '解析失败';
-                const isDouyinCookieError = errorMsg.includes('Cookie') || errorMsg.includes('cookie');
-                
-                let solutionHtml = '';
-                if (isDouyinCookieError) {
-                    solutionHtml = `
-                        <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
-                            <p class="font-semibold text-yellow-800 mb-2">💡 抖音反爬虫限制</p>
-                            <p class="text-yellow-700 mb-2">抖音有严格的反爬虫机制，目前解析受限。</p>
-                            <p class="text-yellow-700 font-semibold mb-1">建议方案：</p>
-                            <ul class="list-disc list-inside text-yellow-700 space-y-1 ml-2">
-                                <li>使用"批量上传视频"TAB，上传本地视频文件</li>
-                                <li>或尝试使用浏览器扩展下载视频后上传</li>
-                                <li>小红书解析成功率较高，可以测试</li>
-                            </ul>
-                        </div>
-                    `;
-                }
                 
                 document.getElementById(resultId).innerHTML = `
                     <div class="flex items-center justify-between">
@@ -1456,7 +2058,6 @@ async function downloadVideosOnly(urls) {
                     <div class="mt-2 text-sm text-red-600">
                         <i class="fas fa-exclamation-circle mr-1"></i>${errorMsg}
                     </div>
-                    ${solutionHtml}
                 `;
             }
         } catch (error) {
@@ -1480,6 +2081,128 @@ async function downloadVideosOnly(urls) {
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
+}
+
+// 对“仅下载”模式的结果继续转录
+async function transcribeDownloadedVideo(resultId) {
+    const item = window.linkDownloadedVideos[resultId];
+    if (!item || !item.filename) {
+        alert('未找到已下载的视频文件，请重新下载');
+        return;
+    }
+
+    const whisperModel = document.getElementById('linkWhisperModel')?.value || 'base';
+    const language = document.getElementById('linkLanguage')?.value || 'zh';
+    const enableAI = document.getElementById('linkEnableAI')?.checked ?? true;
+    const resultEl = document.getElementById(resultId);
+
+    resultEl.innerHTML = `
+        <div class="p-4 border border-blue-200 bg-blue-50 rounded-lg">
+            <div class="flex items-center justify-between">
+                <div class="flex-1">
+                    <p class="font-semibold text-gray-800">${item.title}</p>
+                    <p class="text-sm text-gray-600 mt-1">作者: ${item.author} | 平台: ${item.platform}</p>
+                </div>
+                <div class="ml-4">
+                    <i class="fas fa-spinner fa-spin text-blue-600 text-2xl"></i>
+                </div>
+            </div>
+            <div class="mt-3 text-sm text-blue-700">
+                <i class="fas fa-circle-notch fa-spin mr-1"></i>
+                正在转录${enableAI ? '并进行 AI 整理' : ''}...
+            </div>
+        </div>
+    `;
+
+    try {
+        const response = await fetch('/api/video-link/transcribe-downloaded', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                filename: item.filename,
+                title: item.title,
+                author: item.author,
+                platform: item.platform,
+                source_url: item.source_url,
+                whisper_model: whisperModel,
+                language,
+                enable_ai: enableAI
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            renderLinkTranscribeResult(resultId, result);
+        } else {
+            resultEl.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div class="flex-1">
+                            <p class="font-semibold text-gray-800">${item.title}</p>
+                        </div>
+                        <div class="ml-4">
+                            <i class="fas fa-times-circle text-red-600 text-2xl"></i>
+                        </div>
+                    </div>
+                    <div class="mt-2 text-sm text-red-600">
+                        <i class="fas fa-exclamation-circle mr-1"></i>${result.error || '转录失败'}
+                    </div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        resultEl.innerHTML = `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p class="text-red-800"><i class="fas fa-exclamation-circle mr-2"></i>网络错误: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function renderLinkTranscribeResult(resultId, result) {
+    const title = result.title || '视频';
+    const author = result.author || '未知';
+    const platform = result.platform || 'video';
+    const transcriptUrl = result.transcript_download_url || result.transcript_file;
+    const summaryUrl = result.ai_summary_download_url || result.ai_summary_file;
+    const videoUrl = result.video_download_url || result.video_file;
+
+    document.getElementById(resultId).innerHTML = `
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex-1">
+                    <p class="font-semibold text-gray-800">${title}</p>
+                    <p class="text-sm text-gray-600 mt-1">作者: ${author} | 平台: ${platform}</p>
+                </div>
+                <div class="ml-4">
+                    <i class="fas fa-check-circle text-green-600 text-2xl"></i>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2">
+                ${transcriptUrl ? `
+                    <a href="${transcriptUrl}" target="_blank" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                        <i class="fas fa-file-alt mr-1"></i>转录文本
+                    </a>
+                ` : ''}
+                ${summaryUrl ? `
+                    <a href="${summaryUrl}" target="_blank" class="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700">
+                        <i class="fas fa-brain mr-1"></i>AI 摘要
+                    </a>
+                ` : ''}
+                ${videoUrl ? `
+                    <a href="${videoUrl}" download class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700">
+                        <i class="fas fa-download mr-1"></i>保存到本机
+                    </a>
+                ` : ''}
+            </div>
+            ${result.ai_summary_error ? `
+                <div class="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    转录已完成，但 AI 整理失败：${result.ai_summary_error}
+                </div>
+            ` : ''}
+        </div>
+    `;
 }
 
 // 下载并转录
@@ -1530,41 +2253,7 @@ async function downloadAndTranscribe(urls, whisperModel, language, enableAI) {
             const result = await response.json();
             
             if (result.success) {
-                // 处理成功
-                const title = result.title || '视频';
-                const author = result.author || '未知';
-                const platform = result.platform || 'video';
-                
-                document.getElementById(resultId).innerHTML = `
-                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                        <div class="flex items-center justify-between mb-3">
-                            <div class="flex-1">
-                                <p class="font-semibold text-gray-800">${title}</p>
-                                <p class="text-sm text-gray-600 mt-1">作者: ${author} | 平台: ${platform}</p>
-                            </div>
-                            <div class="ml-4">
-                                <i class="fas fa-check-circle text-green-600 text-2xl"></i>
-                            </div>
-                        </div>
-                        <div class="flex flex-wrap gap-2">
-                            ${result.transcript_file ? `
-                                <a href="${result.transcript_file}" target="_blank" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
-                                    <i class="fas fa-file-alt mr-1"></i>转录文本
-                                </a>
-                            ` : ''}
-                            ${result.ai_summary_file ? `
-                                <a href="${result.ai_summary_file}" target="_blank" class="px-3 py-1 bg-purple-600 text-white text-sm rounded hover:bg-purple-700">
-                                    <i class="fas fa-brain mr-1"></i>AI 摘要
-                                </a>
-                            ` : ''}
-                            ${result.video_file ? `
-                                <a href="${result.video_file}" download class="px-3 py-1 bg-gray-600 text-white text-sm rounded hover:bg-gray-700">
-                                    <i class="fas fa-download mr-1"></i>视频文件
-                                </a>
-                            ` : ''}
-                        </div>
-                    </div>
-                `;
+                renderLinkTranscribeResult(resultId, result);
             } else {
                 // 处理失败
                 document.getElementById(resultId).innerHTML = `
@@ -1611,9 +2300,5 @@ async function downloadAndTranscribe(urls, whisperModel, language, enableAI) {
 // 监听处理模式变化，显示/隐藏 Whisper 设置
 document.getElementById('linkProcessMode')?.addEventListener('change', function() {
     const whisperSettings = document.getElementById('linkWhisperSettings');
-    if (this.value === 'download') {
-        whisperSettings.classList.add('hidden');
-    } else {
-        whisperSettings.classList.remove('hidden');
-    }
+    whisperSettings.classList.remove('hidden');
 });

@@ -14,6 +14,8 @@ output/
 output/*.md
 output/*.txt
 uploads/
+audio_output/
+temp_videos/
 *.srt
 requirements.txt
 !requirements.txt
@@ -22,3 +24,5 @@ venv/
 env/
 venv311/
 venv311_intel_bak/
+offline_packages/
+*.code-workspace

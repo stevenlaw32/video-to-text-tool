@@ -29,6 +29,7 @@
 - 📦 **批量处理**: 支持文件夹批量处理多个视频
 - 🌐 **Web界面**: 提供简洁的网页操作界面
 - 💾 **多格式导出**: 支持TXT、SRT字幕、分段文本、Markdown等格式
+- 🔗 **视频链接下载**: 抖音走 iesdouyin 解析，其它平台优先用 yt-dlp 下载，可继续转录和AI整理
 
 ## 安装步骤
 
@@ -55,6 +56,8 @@ sudo apt-get install ffmpeg
 cd /Users/apple/开发/DevOps/video-to-text-tool
 pip install -r requirements.txt
 ```
+
+链接下载功能依赖 `yt-dlp`。抖音会优先走 `iesdouyin.com/share/video/<id>/` 解析 `play_addr`；如果使用小红书等需要登录态的平台，请先在 Chrome 中登录对应网站，工具会通过 yt-dlp 读取浏览器 Cookie。
 
 ### 3. 配置API密钥
 

@@ -71,7 +71,8 @@ class ModelsConfig:
         return None
     
     def add_model(self, alias: str, api_key: str, base_url: str, 
-                  model_provider: str, model_name: str, custom_prompt: str = '') -> bool:
+                  model_provider: str, model_name: str, custom_prompt: str = '',
+                  max_tokens: Optional[int] = None, temperature: Optional[float] = None) -> bool:
         """
         添加新的模型配置
         
@@ -82,6 +83,8 @@ class ModelsConfig:
             model_provider: 模型提供商
             model_name: 模型名称
             custom_prompt: 自定义提示词（可选）
+            max_tokens: 最大生成长度（可选）
+            temperature: 生成温度（可选）
             
         Returns:
             是否添加成功
@@ -98,6 +101,10 @@ class ModelsConfig:
             "model_name": model_name,
             "custom_prompt": custom_prompt
         }
+        if max_tokens is not None:
+            new_model["max_tokens"] = max_tokens
+        if temperature is not None:
+            new_model["temperature"] = temperature
         
         self.config["models"].append(new_model)
         
@@ -111,7 +118,9 @@ class ModelsConfig:
                      base_url: Optional[str] = None, 
                      model_provider: Optional[str] = None,
                      model_name: Optional[str] = None,
-                     custom_prompt: Optional[str] = None) -> bool:
+                     custom_prompt: Optional[str] = None,
+                     max_tokens: Optional[int] = None,
+                     temperature: Optional[float] = None) -> bool:
         """
         更新模型配置
         
@@ -122,6 +131,8 @@ class ModelsConfig:
             model_provider: 模型提供商（可选）
             model_name: 模型名称（可选）
             custom_prompt: 自定义提示词（可选）
+            max_tokens: 最大生成长度（可选）
+            temperature: 生成温度（可选）
             
         Returns:
             是否更新成功
@@ -140,6 +151,10 @@ class ModelsConfig:
             model["model_name"] = model_name
         if custom_prompt is not None:
             model["custom_prompt"] = custom_prompt
+        if max_tokens is not None:
+            model["max_tokens"] = max_tokens
+        if temperature is not None:
+            model["temperature"] = temperature
         
         return self._save_config()
     
@@ -148,7 +163,9 @@ class ModelsConfig:
                      base_url: Optional[str] = None,
                      model_provider: Optional[str] = None,
                      model_name: Optional[str] = None,
-                     custom_prompt: Optional[str] = None) -> bool:
+                     custom_prompt: Optional[str] = None,
+                     max_tokens: Optional[int] = None,
+                     temperature: Optional[float] = None) -> bool:
         """
         重命名模型并更新配置
         
@@ -160,6 +177,8 @@ class ModelsConfig:
             model_provider: 模型提供商（可选）
             model_name: 模型名称（可选）
             custom_prompt: 自定义提示词（可选）
+            max_tokens: 最大生成长度（可选）
+            temperature: 生成温度（可选）
             
         Returns:
             是否重命名成功
@@ -187,6 +206,10 @@ class ModelsConfig:
             old_model["model_name"] = model_name
         if custom_prompt is not None:
             old_model["custom_prompt"] = custom_prompt
+        if max_tokens is not None:
+            old_model["max_tokens"] = max_tokens
+        if temperature is not None:
+            old_model["temperature"] = temperature
         
         # 如果重命名的是活动模型，也要更新活动模型的别名
         if self.config.get("active_model") == old_alias:

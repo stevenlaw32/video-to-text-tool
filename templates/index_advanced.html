@@ -41,13 +41,13 @@
                 
                 <!-- 右侧：功能按钮 -->
                 <div class="flex items-center space-x-2">
-                    <a href="/ocr" class="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors flex items-center text-sm">
+                    <a href="/ocr" target="_blank" class="px-3 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors flex items-center text-sm">
                         <i class="fas fa-eye mr-1.5"></i>OCR 配置
                     </a>
-                    <a href="/models" id="modelsLink" class="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center text-sm">
+                    <a href="/models" target="_blank" id="modelsLink" class="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center text-sm">
                         <i class="fas fa-layer-group mr-1.5"></i>多模型
                     </a>
-                    <a href="/settings" id="settingsLink" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center text-sm">
+                    <a href="/settings" target="_blank" id="settingsLink" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center text-sm">
                         <i class="fas fa-cog mr-1.5"></i>API 设置
                     </a>
                     <button onclick="shutdownServer()" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center text-sm">
@@ -69,6 +69,173 @@
                 <button onclick="switchTab('link')" id="linkTab" class="flex-1 px-6 py-4 text-center font-semibold transition-colors border-b-2 border-transparent text-gray-600 hover:text-gray-800">
                     <i class="fas fa-link mr-2"></i>视频链接解析
                 </button>
+                <button onclick="switchTab('textSummary')" id="textSummaryTab" class="flex-1 px-6 py-4 text-center font-semibold transition-colors border-b-2 border-transparent text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-align-left mr-2"></i>文本总结
+                </button>
+            </div>
+        </div>
+
+        <!-- Text Summary Tab Content -->
+        <div id="textSummaryTabContent" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left: Upload, File List, Log, Results -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Upload Area -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-file-upload mr-2 text-indigo-600"></i>上传文档
+                            <span class="text-xs text-gray-400 font-normal ml-2">支持 PDF / Word / Markdown / TXT</span>
+                        </h3>
+                        <div id="docDropZone" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition-colors">
+                            <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-3"></i>
+                            <p class="text-gray-600 font-medium">拖拽文档到此处，或点击上传</p>
+                            <p class="text-gray-400 text-sm mt-1">支持批量上传多个文档</p>
+                            <input type="file" id="docFileInput" multiple accept=".pdf,.doc,.docx,.md,.txt" class="hidden">
+                        </div>
+                    </div>
+
+                    <!-- File List -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-gray-800">
+                                <i class="fas fa-list mr-2 text-indigo-600"></i>文档列表
+                                <span id="docFileCount" class="text-sm text-gray-500 ml-2">(0 个文件)</span>
+                            </h3>
+                            <button onclick="clearAllDocs()" class="text-red-500 hover:text-red-700 text-sm font-medium">
+                                <i class="fas fa-trash mr-1"></i>清空
+                            </button>
+                        </div>
+                        <div id="docFileList" class="space-y-3 max-h-96 overflow-y-auto">
+                            <div class="text-center py-8 text-gray-400">
+                                <i class="fas fa-inbox text-4xl mb-2"></i>
+                                <p class="text-sm">暂无文档，请上传文件</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Processing Log -->
+                    <div id="docLogSection" class="bg-white rounded-2xl shadow-xl p-6 hidden">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-lg font-semibold text-gray-800">
+                                <i class="fas fa-terminal mr-2 text-indigo-600"></i>处理日志
+                            </h3>
+                            <button onclick="clearDocLog()" class="text-gray-400 hover:text-gray-600 text-sm">
+                                <i class="fas fa-eraser mr-1"></i>清除
+                            </button>
+                        </div>
+                        <div id="docLogContainer" class="bg-gray-900 rounded-lg p-4 font-mono text-xs leading-relaxed max-h-80 overflow-y-auto">
+                        </div>
+                    </div>
+
+                    <!-- Results -->
+                    <div id="docResultSection" class="hidden space-y-4">
+                        <!-- Merged result -->
+                        <div id="docMergedResult" class="bg-white rounded-2xl shadow-xl p-6 hidden">
+                            <div class="flex justify-between items-center mb-3">
+                                <h3 class="text-base font-semibold text-gray-800">
+                                    <i class="fas fa-brain mr-2 text-indigo-500"></i>AI 总结
+                                </h3>
+                                <div class="flex space-x-2">
+                                    <button onclick="copyDocSummary(event)" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                        <i class="fas fa-copy mr-1"></i>复制
+                                    </button>
+                                    <button onclick="downloadDocSummary()" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                        <i class="fas fa-download mr-1"></i>下载
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="docMergedContent" class="prose max-w-none bg-gray-50 p-4 rounded-lg max-h-[600px] overflow-y-auto text-sm"></div>
+                        </div>
+
+                        <!-- Split results (dynamically filled) -->
+                        <div id="docSplitResults" class="hidden space-y-4">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Stats, Settings -->
+                <div class="space-y-6">
+                    <!-- Statistics -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-chart-bar mr-2 text-indigo-600"></i>统计信息
+                        </h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">总文档数</span>
+                                <span id="docStatTotal" class="text-lg font-bold text-gray-800">0</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">已提取文本</span>
+                                <span id="docStatExtracted" class="text-lg font-bold text-green-600">0</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">总字符数</span>
+                                <span id="docStatChars" class="text-lg font-bold text-blue-600">0</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">提取失败</span>
+                                <span id="docStatFailed" class="text-lg font-bold text-red-600">0</span>
+                            </div>
+                            <!-- 进度条 -->
+                            <div class="pt-3 mt-3 border-t border-gray-100">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-xs text-gray-500">进度</span>
+                                    <span id="docProgressText" class="text-xs text-gray-500"></span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div id="docProgressBar" class="h-full rounded-full transition-all duration-300 bg-green-500" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Settings (moved to right) -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                            <i class="fas fa-cog mr-2 text-indigo-600"></i>处理设置
+                        </h3>
+                        <div class="space-y-4">
+                            <!-- Model Selection -->
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">AI模型</label>
+                                <select id="docAiModel" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                                    <option value="">默认模型</option>
+                                </select>
+                            </div>
+                            <!-- Extract Mode -->
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">文本提取方式</label>
+                                <select id="docExtractMode" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm">
+                                    <option value="auto">自动（三级降级策略）</option>
+                                    <option value="markitdown">强制 MarkItDown（微软）</option>
+                                    <option value="ocr">强制 OCR（云端识别）</option>
+                                    <option value="pdfplumber">强制 pdfplumber</option>
+                                </select>
+                                <p class="text-xs text-gray-400 mt-1">自动模式按 MarkItDown → pdfplumber → OCR 降级</p>
+                            </div>
+                            <!-- Merge / Split -->
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">输出方式</label>
+                                <div class="flex rounded-lg overflow-hidden border border-gray-300">
+                                    <button id="docMergeBtn" onclick="setDocOutputMode('merge')" class="flex-1 py-2 font-medium bg-indigo-600 text-white transition-colors text-sm">
+                                        <i class="fas fa-object-group mr-1"></i>合并成一份
+                                    </button>
+                                    <button id="docSplitBtn" onclick="setDocOutputMode('split')" class="flex-1 py-2 font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm">
+                                        <i class="fas fa-object-ungroup mr-1"></i>分开处理
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex space-x-3 mt-6">
+                            <button onclick="startDocSummary()" id="docSummaryBtn" class="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                                <i class="fas fa-brain mr-2"></i>开始总结
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -126,6 +293,7 @@
                                 <option value="auto" selected>自动检测 - 智能选择 Whisper 或 OCR</option>
                                 <option value="whisper">Whisper - 音频转录（有声视频）</option>
                                 <option value="ocr">OCR - 画面文字提取（无声视频）</option>
+                                <option value="hybrid">🔀 混合模式 - 画面 + 音频同时处理</option>
                             </select>
                             <p class="text-xs text-gray-500 mt-1">
                                 <i class="fas fa-info-circle mr-1"></i>
@@ -161,6 +329,26 @@
                                     <option value="ja">日本語</option>
                                     <option value="ko">한국어</option>
                                 </select>
+                            </div>
+                        </div>
+
+                        <div id="hybridSettings" class="hidden">
+                            <div class="p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                                <div class="flex items-start">
+                                    <i class="fas fa-layer-group text-purple-600 text-xl mr-3 mt-1"></i>
+                                    <div class="flex-1">
+                                        <p class="text-sm font-semibold text-purple-800 mb-2">混合模式说明</p>
+                                        <ul class="text-xs text-purple-700 space-y-1">
+                                            <li>• <strong>同时运行</strong> Whisper 音频转录 + OCR 画面识别</li>
+                                            <li>• 两路内容分别提取后，统一发送给 AI 进行整合</li>
+                                            <li>• 适合：PPT 录屏讲解、教学视频、带字幕的课程等</li>
+                                            <li>• 需要配置 OCR API（百度/腾讯/阿里云）</li>
+                                        </ul>
+                                        <a href="/ocr" target="_blank" class="inline-block mt-2 text-xs text-purple-600 hover:text-purple-800 font-semibold">
+                                            <i class="fas fa-cog mr-1"></i>配置 OCR API →
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -206,6 +394,25 @@
                                     <option value="qwen-turbo">qwen-turbo</option>
                                     <option value="qwen-plus">qwen-plus</option>
                                 </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">
+                                    多视频输出方式
+                                </label>
+                                <div class="flex rounded-lg overflow-hidden border border-gray-300 text-sm">
+                                    <button id="mergeBtn" onclick="setOutputMode('merge')"
+                                        class="flex-1 py-2 font-medium bg-indigo-600 text-white transition-colors">
+                                        <i class="fas fa-compress-arrows-alt mr-1"></i>合并成一份
+                                    </button>
+                                    <button id="splitBtn" onclick="setOutputMode('split')"
+                                        class="flex-1 py-2 font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors">
+                                        <i class="fas fa-columns mr-1"></i>分开处理
+                                    </button>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    合并：所有视频整合成一份；分开：每个视频各自生成摘要
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -357,6 +564,16 @@
                                 <span class="text-sm text-gray-600">失败</span>
                                 <span id="statFailed" class="text-lg font-bold text-red-600">0</span>
                             </div>
+                            <!-- 进度条 -->
+                            <div class="pt-3 mt-3 border-t border-gray-100">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-xs text-gray-500">进度</span>
+                                    <span id="audioProgressText" class="text-xs text-gray-500"></span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                    <div id="audioProgressBar" class="h-full rounded-full transition-all duration-300 bg-green-500" style="width: 0%"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -391,6 +608,7 @@
                                 <span class="inline-block px-2 py-1 bg-black text-white text-xs rounded ml-2">抖音</span>
                                 <span class="inline-block px-2 py-1 bg-red-500 text-white text-xs rounded ml-2">小红书</span>
                                 <span class="inline-block px-2 py-1 bg-orange-500 text-white text-xs rounded ml-2">快手</span>
+                                <span class="inline-block px-2 py-1 bg-gray-700 text-white text-xs rounded ml-2">yt-dlp 支持的平台</span>
                             </p>
                         </div>
 
@@ -459,7 +677,7 @@
                             </select>
                             <p class="text-xs text-gray-500 mt-2">
                                 <i class="fas fa-info-circle mr-1"></i>
-                                <strong>仅下载：</strong>直接保存到浏览器下载文件夹
+                                <strong>仅下载：</strong>下载后可手动转录文本或保存到本机
                             </p>
                         </div>
 
@@ -509,7 +727,7 @@
                         <ul class="space-y-2 text-sm text-gray-600">
                             <li class="flex items-start">
                                 <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
-                                <span>支持抖音、小红书、快手链接</span>
+                                <span>抖音走专用解析，小红书、快手等平台走 yt-dlp</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
@@ -517,7 +735,7 @@
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
-                                <span>仅下载模式直接保存到下载文件夹</span>
+                                <span>仅下载模式会生成可保存的视频文件</span>
                             </li>
                             <li class="flex items-start">
                                 <i class="fas fa-check text-green-500 mr-2 mt-0.5"></i>
@@ -612,7 +830,12 @@
                 <div id="transcriptResult" class="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto text-sm text-gray-700 whitespace-pre-wrap font-mono"></div>
             </div>
 
-            <!-- AI Summary -->
+            <!-- Split AI Summaries (分开模式) -->
+            <div id="splitSummarySection" class="hidden space-y-4">
+                <!-- 由 JS 动态填充 -->
+            </div>
+
+            <!-- AI Summary (合并模式) -->
             <div id="summarySection" class="bg-white rounded-2xl shadow-xl p-8 hidden">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold text-gray-800">

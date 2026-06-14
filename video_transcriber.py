@@ -97,7 +97,20 @@ class VideoTranscriber:
         print(f"正在提取音频: {video_path}")
         if has_log_stream:
             log_stream.add_log(f"🎵 提取音频: {os.path.basename(video_path)}", "info")
-            
+
+        # 先探测视频流，无音频轨道时提前返回 None（触发 OCR 回退）
+        try:
+            probe = ffmpeg.probe(video_path)
+            has_audio = any(s.get('codec_type') == 'audio' for s in probe.get('streams', []))
+            if not has_audio:
+                msg = "视频无音频轨道，将跳过语音转录（自动切换 OCR 模式）"
+                print(f"⚠️  {msg}")
+                if has_log_stream:
+                    log_stream.add_log(f"⚠️  {msg}", "warning")
+                return None
+        except Exception:
+            pass  # 探测失败则继续尝试提取
+
         try:
             # 使用 ffmpeg 提取音频
             (
@@ -125,8 +138,12 @@ class VideoTranscriber:
             
             return output_path
         except ffmpeg.Error as e:
-            error_msg = f"音频提取失败: {e.stderr.decode() if e.stderr else str(e)}"
-            print(f"❌ {error_msg}")
+            stderr_full = e.stderr.decode(errors='replace') if e.stderr else str(e)
+            # ffmpeg stderr 包含版本头，只取最后几行（实际错误信息）
+            stderr_lines = [l for l in stderr_full.splitlines() if l.strip()]
+            stderr_brief = '\n'.join(stderr_lines[-4:]) if stderr_lines else stderr_full
+            print(f"❌ ffmpeg 完整错误:\n{stderr_full}")  # 终端输出完整日志
+            error_msg = f"音频提取失败: {stderr_brief}"
             if has_log_stream:
                 log_stream.add_log(f"❌ {error_msg}", "error")
             raise Exception(error_msg)
@@ -217,6 +234,9 @@ class VideoTranscriber:
         audio_path = None
         try:
             audio_path = self.extract_audio(video_path)
+            if audio_path is None:
+                # 无音频轨道，返回空结果以触发 OCR 回退
+                return {'text': '', 'segments': [], 'language': 'unknown'}
             result = self.transcribe(audio_path, language)
             return result
         except Exception as e:

@@ -6,6 +6,7 @@
 import subprocess
 import os
 from pathlib import Path
+from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -51,12 +52,19 @@ class AudioExtractor:
             
             # 生成输出文件名
             if custom_filename:
-                output_filename = f"{custom_filename}.{output_format}"
+                base_name = custom_filename
             else:
-                video_name = Path(video_path).stem
-                output_filename = f"{video_name}.{output_format}"
+                base_name = Path(video_path).stem
             
+            output_filename = f"{base_name}.{output_format}"
             output_path = os.path.join(self.output_dir, output_filename)
+            
+            # 如果文件名已存在，加时间戳后缀避免覆盖
+            if os.path.exists(output_path):
+                ts = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+                output_filename = f"{base_name}_-_{ts}.{output_format}"
+                output_path = os.path.join(self.output_dir, output_filename)
+                logger.info(f"文件名冲突，已加时间戳: {output_filename}")
             
             # 根据格式选择编码器
             codec_map = {

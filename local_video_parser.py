@@ -1,330 +1,369 @@
 """
-本地视频解析器
-集成 TikTokDownloader 和 XHS-Downloader
+视频链接下载器
+
+抖音沿用 lark-video2note 的 iesdouyin share API 路径；小红书、
+B站、快手等其它平台统一使用 yt-dlp。旧的站点专用解析器不再参与
+运行链路，避免维护多套容易失效的下载逻辑。
 """
 
-import sys
-import os
+import asyncio
+import importlib.util
 import json
 import logging
-import asyncio
-import httpx
+import os
+import re
+import requests
+import shutil
+import subprocess
+import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class LocalVideoParser:
-    """本地视频解析器 - 使用免费开源库"""
-    
-    def __init__(self, config_path: str = 'parsers/config.json'):
-        """
-        初始化本地解析器
-        
-        Args:
-            config_path: 配置文件路径
-        """
-        self.config_path = config_path
-        self.config = self._load_config()
-        self._setup_parsers()
-    
-    def _load_config(self) -> Dict:
-        """加载配置文件"""
-        if os.path.exists(self.config_path):
-            try:
-                with open(self.config_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.warning(f"加载配置文件失败: {e}")
-        
+    """视频链接下载器：抖音专用路径 + yt-dlp 通用路径。"""
+
+    UA_IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15"
+
+    def __init__(self, download_dir: str = "temp_videos/link_downloads"):
+        self.download_dir = Path(download_dir)
+        self.download_dir.mkdir(parents=True, exist_ok=True)
+        self.ytdlp_cmd = self._resolve_ytdlp()
+
+    def _resolve_ytdlp(self) -> List[str]:
+        """找到可用的 yt-dlp 命令。"""
+        binary = shutil.which("yt-dlp")
+        if binary:
+            return [binary]
+
+        fallback = Path("/tmp/yt-dlp-nightly")
+        if fallback.exists() and os.access(fallback, os.X_OK):
+            return [str(fallback)]
+
+        if importlib.util.find_spec("yt_dlp"):
+            return [sys.executable, "-m", "yt_dlp"]
+
+        raise RuntimeError(
+            "未找到 yt-dlp。请先安装：pip install yt-dlp，"
+            "或把可执行文件放到 /tmp/yt-dlp-nightly"
+        )
+
+    def _extract_url(self, raw: str) -> str:
+        match = re.search(r"https?://[^\s]+", raw or "")
+        if not match:
+            raise ValueError("未找到有效的视频链接")
+        return match.group(0).strip()
+
+    def _detect_platform(self, url: str, extractor: str = "") -> str:
+        text = f"{url} {extractor}".lower()
+        if "xiaohongshu.com" in text or "xhslink" in text or "xiaohongshu" in text:
+            return "xiaohongshu"
+        if "douyin.com" in text or "iesdouyin" in text or "douyin" in text:
+            return "douyin"
+        if "kuaishou.com" in text or "kuaishou" in text:
+            return "kuaishou"
+        if "bilibili.com" in text or "b23.tv" in text or "bilibili" in text:
+            return "bilibili"
+        if "youtube.com" in text or "youtu.be" in text or "youtube" in text:
+            return "youtube"
+        return (extractor or "video").lower()
+
+    def _is_douyin_url(self, url: str) -> bool:
+        lowered = url.lower()
+        return "douyin.com" in lowered or "iesdouyin" in lowered
+
+    def _cookie_args(self, url: str) -> List[str]:
+        """短视频平台优先读取 Chrome 登录态。"""
+        lowered = url.lower()
+        needs_cookie = any(
+            key in lowered
+            for key in (
+                "xiaohongshu.com",
+                "xhslink",
+                "kuaishou.com",
+            )
+        )
+        return ["--cookies-from-browser", "chrome"] if needs_cookie else []
+
+    def _safe_filename(self, value: str, max_length: int = 80) -> str:
+        cleaned = re.sub(r'[/\\:*?"<>|\r\n\t]+', "", value or "").strip()
+        return (cleaned[:max_length] or "untitled").strip()
+
+    def _decode_json_text(self, value: str, fallback: str) -> str:
+        if not value:
+            return fallback
+        try:
+            return json.loads(f'"{value}"')
+        except json.JSONDecodeError:
+            return value or fallback
+
+    def _unescape_url(self, value: str) -> str:
+        return (
+            value.replace("\\u002F", "/")
+            .replace("\\u0026", "&")
+            .replace("\\/", "/")
+        )
+
+    def _run_ytdlp(self, args: List[str], timeout: int) -> subprocess.CompletedProcess:
+        cmd = self.ytdlp_cmd + args
+        logger.info("运行 yt-dlp: %s", " ".join(cmd[:2] + ["..."]))
+        return subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+
+    def _resolve_douyin_video_id(self, url: str) -> str:
+        response = requests.get(
+            url,
+            headers={"User-Agent": self.UA_IOS},
+            allow_redirects=True,
+            timeout=30,
+        )
+        final_url = response.url
+        match = re.search(r"video/(\d+)", final_url) or re.search(r"aweme_id=(\d+)", final_url)
+        if not match:
+            raise ValueError(f"无法从抖音链接解析 video_id: {final_url}")
+        return match.group(1)
+
+    def _get_douyin_info(self, raw_url: str) -> Dict:
+        url = self._extract_url(raw_url)
+        video_id = self._resolve_douyin_video_id(url)
+        share_url = f"https://www.iesdouyin.com/share/video/{video_id}/"
+
+        response = requests.get(
+            share_url,
+            headers={"User-Agent": self.UA_IOS},
+            timeout=30,
+        )
+        response.raise_for_status()
+        html = response.text
+
+        play_block = re.search(r'"play_addr":\{[^}]*"url_list":\[[^\]]*\]', html)
+        if not play_block:
+            raise ValueError("NOT_A_VIDEO: 这条抖音链接看起来不是视频，可能是图文内容或页面结构已变化")
+
+        candidates = [
+            self._unescape_url(item)
+            for item in re.findall(r'https:[^"]+', play_block.group(0))
+        ]
+        play_url = next((item for item in candidates if "playwm" in item), None) or (candidates[0] if candidates else "")
+        if not play_url:
+            raise ValueError("未能从抖音 share 页面解析视频播放地址")
+
+        title_match = re.search(r'"desc":"((?:\\.|[^"])*)"', html)
+        author_match = re.search(r'"nickname":"((?:\\.|[^"])*)"', html)
+        duration_match = re.search(r'"duration":(\d+)', html)
+
+        title = self._decode_json_text(title_match.group(1) if title_match else "", f"douyin-{video_id}")
+        author = self._decode_json_text(author_match.group(1) if author_match else "", "unknown")
+        duration = int(duration_match.group(1)) / 1000 if duration_match else 0
+
         return {
-            'douyin': {'cookie': ''},
-            'xiaohongshu': {'cookie': ''}
+            "success": True,
+            "platform": "douyin",
+            "title": title,
+            "author": author,
+            "duration": duration,
+            "video_id": video_id,
+            "thumbnail": "",
+            "source_url": url,
+            "video_url": play_url,
         }
-    
-    def _setup_parsers(self):
-        """设置解析器路径"""
-        project_root = Path(__file__).parent
-        douyin_path = project_root / 'parsers' / 'douyin_parser'
-        xhs_path = project_root / 'parsers' / 'xhs_parser'
-        
-        if douyin_path.exists():
-            sys.path.insert(0, str(douyin_path))
-            logger.info(f"✓ 已加载抖音解析器")
-        else:
-            logger.warning(f"⚠️  抖音解析器未找到，请运行: ./安装视频解析库.sh")
-        
-        if xhs_path.exists():
-            sys.path.insert(0, str(xhs_path))
-            logger.info(f"✓ 已加载小红书解析器")
-        else:
-            logger.warning(f"⚠️  小红书解析器未找到，请运行: ./安装视频解析库.sh")
-    
-    async def parse_douyin(self, url: str) -> Dict:
-        """
-        解析抖音视频
-        
-        Args:
-            url: 抖音视频链接
-            
-        Returns:
-            解析结果
-        """
+
+    def _download_douyin(self, raw_url: str, output_dir: Optional[str] = None) -> Dict:
+        target_dir = Path(output_dir) if output_dir else self.download_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        info = self._get_douyin_info(raw_url)
+        safe_title = self._safe_filename(info["title"])
+        output_file = target_dir / f"douyin-{safe_title}.mp4"
+
+        with requests.get(
+            info["video_url"],
+            headers={"User-Agent": self.UA_IOS},
+            stream=True,
+            timeout=120,
+        ) as response:
+            response.raise_for_status()
+            with open(output_file, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024 * 256):
+                    if chunk:
+                        f.write(chunk)
+
+        if not output_file.exists() or output_file.stat().st_size < 10000:
+            raise ValueError("抖音视频下载失败，输出文件为空或过小")
+
+        info["file_path"] = str(output_file)
+        info["video_file"] = str(output_file)
+        info["file_size"] = output_file.stat().st_size
+        return info
+
+    def _parse_info_from_stdout(self, stdout: str) -> Dict:
+        """yt-dlp 可能输出多行 JSON，取最后一个对象。"""
+        for line in reversed(stdout.splitlines()):
+            line = line.strip()
+            if not line.startswith("{"):
+                continue
+            try:
+                return json.loads(line)
+            except json.JSONDecodeError:
+                continue
+        return {}
+
+    def _find_downloaded_file(self, output_dir: Path, before: set[Path]) -> Optional[Path]:
+        candidates = [
+            p
+            for p in output_dir.iterdir()
+            if p.is_file() and p not in before and p.suffix.lower() in {".mp4", ".m4v", ".mov", ".webm", ".mkv"}
+        ]
+        if not candidates:
+            candidates = [p for p in output_dir.iterdir() if p.is_file() and p not in before]
+        if not candidates:
+            return None
+        return max(candidates, key=lambda p: p.stat().st_mtime)
+
+    def _normalize_info(self, info: Dict, url: str, file_path: Optional[Path] = None) -> Dict:
+        platform = self._detect_platform(url, info.get("extractor_key") or info.get("extractor") or "")
+        return {
+            "success": True,
+            "platform": platform,
+            "title": info.get("title") or "未命名视频",
+            "author": info.get("uploader") or info.get("channel") or info.get("creator") or "unknown",
+            "duration": info.get("duration") or 0,
+            "video_id": info.get("id") or "",
+            "thumbnail": info.get("thumbnail") or "",
+            "source_url": url,
+            "video_file": str(file_path) if file_path else "",
+            "file_size": file_path.stat().st_size if file_path and file_path.exists() else 0,
+        }
+
+    async def parse(self, raw_url: str) -> Dict:
+        """只读取视频元信息，不下载。"""
+        return await asyncio.to_thread(self.parse_sync, raw_url)
+
+    def parse_sync(self, raw_url: str) -> Dict:
         try:
-            # 简化的解析逻辑 - 直接使用 httpx 获取重定向后的真实链接
-            async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
-                response = await client.get(url)
-                real_url = str(response.url)
-                
-                # 从URL中提取视频ID
-                import re
-                video_id_match = re.search(r'/video/(\d+)', real_url)
-                if not video_id_match:
-                    return {
-                        'success': False,
-                        'error': '无法解析视频ID'
-                    }
-                
-                video_id = video_id_match.group(1)
-                
-                # 构建API请求获取视频信息
-                api_url = f"https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id={video_id}"
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Referer': f'https://www.douyin.com/video/{video_id}',
-                    'Accept': 'application/json, text/plain, */*',
-                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-                    'Accept-Encoding': 'gzip, deflate, br'
-                }
-                
-                cookie = self.config.get('douyin', {}).get('cookie', '')
-                if cookie:
-                    headers['Cookie'] = cookie
-                
-                api_response = await client.get(api_url, headers=headers)
-                
-                # 检查响应
-                if api_response.status_code != 200:
-                    logger.error(f"API请求失败: {api_response.status_code}")
-                    return {
-                        'success': False,
-                        'error': f'API请求失败: {api_response.status_code}'
-                    }
-                
-                try:
-                    data = api_response.json()
-                except Exception as e:
-                    logger.error(f"解析JSON失败: {e}")
-                    logger.error(f"响应内容: {api_response.text[:500]}")
-                    return {
-                        'success': False,
-                        'error': '解析失败，可能需要配置Cookie。请编辑 parsers/config.json 添加抖音Cookie'
-                    }
-                
-                if data.get('status_code') == 0 and 'aweme_detail' in data:
-                    aweme = data['aweme_detail']
-                    video_info = aweme.get('video', {})
-                    
-                    # 获取视频下载地址
-                    play_addr = video_info.get('play_addr', {})
-                    video_url = ''
-                    if 'url_list' in play_addr and play_addr['url_list']:
-                        video_url = play_addr['url_list'][0]
-                    
-                    return {
-                        'success': True,
-                        'platform': 'douyin',
-                        'title': aweme.get('desc', '抖音视频'),
-                        'author': aweme.get('author', {}).get('nickname', '未知'),
-                        'video_url': video_url,
-                        'cover_url': video_info.get('cover', {}).get('url_list', [''])[0],
-                        'duration': video_info.get('duration', 0) / 1000,
-                        'video_id': video_id
-                    }
-                else:
-                    return {
-                        'success': False,
-                        'error': '解析失败，请检查链接或配置Cookie'
-                    }
-                    
-        except Exception as e:
-            logger.error(f"解析抖音视频失败: {e}")
-            return {
-                'success': False,
-                'error': f'解析失败: {str(e)}'
-            }
-    
-    async def parse_xiaohongshu(self, url: str) -> Dict:
-        """
-        解析小红书笔记
-        
-        Args:
-            url: 小红书链接
-            
-        Returns:
-            解析结果
-        """
-        try:
-            # 简化的解析逻辑
-            async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
-                response = await client.get(url)
-                real_url = str(response.url)
-                
-                # 从URL中提取笔记ID
-                import re
-                note_id_match = re.search(r'/explore/([a-zA-Z0-9]+)', real_url)
-                if not note_id_match:
-                    return {
-                        'success': False,
-                        'error': '无法解析笔记ID'
-                    }
-                
-                note_id = note_id_match.group(1)
-                
-                # 构建API请求
-                api_url = f"https://edith.xiaohongshu.com/api/sns/web/v1/feed"
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                    'Referer': 'https://www.xiaohongshu.com/'
-                }
-                
-                cookie = self.config.get('xiaohongshu', {}).get('cookie', '')
-                if cookie:
-                    headers['Cookie'] = cookie
-                
-                params = {
-                    'source_note_id': note_id
-                }
-                
-                api_response = await client.get(api_url, headers=headers, params=params)
-                data = api_response.json()
-                
-                if data.get('success'):
-                    items = data.get('data', {}).get('items', [])
-                    if items:
-                        note = items[0].get('note_card', {})
-                        
-                        # 判断是视频还是图文
-                        note_type = note.get('type', 'normal')
-                        video_url = ''
-                        
-                        if note_type == 'video':
-                            video_info = note.get('video', {})
-                            if 'media' in video_info:
-                                video_url = video_info['media'].get('stream', {}).get('h264', [{}])[0].get('master_url', '')
-                        
-                        return {
-                            'success': True,
-                            'platform': 'xiaohongshu',
-                            'title': note.get('title', '小红书笔记'),
-                            'author': note.get('user', {}).get('nickname', '未知'),
-                            'video_url': video_url,
-                            'cover_url': note.get('cover', {}).get('url', ''),
-                            'note_type': note_type,
-                            'note_id': note_id
-                        }
-                
+            url = self._extract_url(raw_url)
+            if self._is_douyin_url(url):
+                return self._get_douyin_info(url)
+
+            args = [
+                "--dump-single-json",
+                "--skip-download",
+                "--no-playlist",
+                *self._cookie_args(url),
+                url,
+            ]
+            result = self._run_ytdlp(args, timeout=60)
+            if result.returncode != 0:
                 return {
-                    'success': False,
-                    'error': '解析失败，请检查链接或配置Cookie'
+                    "success": False,
+                    "error": self._format_error(result.stderr),
                 }
-                    
+
+            info = self._parse_info_from_stdout(result.stdout)
+            if not info:
+                return {"success": False, "error": "yt-dlp 未返回可解析的视频信息"}
+
+            data = self._normalize_info(info, url)
+            data["video_url"] = info.get("url", "")
+            return data
         except Exception as e:
-            logger.error(f"解析小红书笔记失败: {e}")
-            return {
-                'success': False,
-                'error': f'解析失败: {str(e)}'
-            }
-    
-    async def parse(self, url: str) -> Dict:
-        """
-        自动识别并解析视频链接
-        
-        Args:
-            url: 视频链接
-            
-        Returns:
-            解析结果
-        """
-        # 检测平台
-        if 'douyin.com' in url or 'iesdouyin.com' in url:
-            return await self.parse_douyin(url)
-        elif 'xiaohongshu.com' in url or 'xhslink.com' in url:
-            return await self.parse_xiaohongshu(url)
-        else:
-            return {
-                'success': False,
-                'error': '不支持的平台或无效的链接'
-            }
-    
-    async def download_video(self, video_url: str, save_path: str) -> Dict:
-        """
-        下载视频文件
-        
-        Args:
-            video_url: 视频下载地址
-            save_path: 保存路径
-            
-        Returns:
-            下载结果
-        """
+            logger.exception("解析视频链接失败")
+            return {"success": False, "error": str(e)}
+
+    async def download(self, raw_url: str, output_dir: Optional[str] = None) -> Dict:
+        """下载视频到本地，返回文件路径和元信息。"""
+        return await asyncio.to_thread(self.download_sync, raw_url, output_dir)
+
+    def download_sync(self, raw_url: str, output_dir: Optional[str] = None) -> Dict:
         try:
-            save_path = Path(save_path)
-            save_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-                'Referer': 'https://www.douyin.com/'
-            }
-            
-            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-                async with client.stream('GET', video_url, headers=headers) as response:
-                    response.raise_for_status()
-                    
-                    total_size = int(response.headers.get('content-length', 0))
-                    downloaded = 0
-                    
-                    with open(save_path, 'wb') as f:
-                        async for chunk in response.aiter_bytes(chunk_size=8192):
-                            f.write(chunk)
-                            downloaded += len(chunk)
-                            
-                            if total_size > 0:
-                                progress = (downloaded / total_size) * 100
-                                if downloaded % (1024 * 1024) == 0:  # 每1MB打印一次
-                                    logger.debug(f"下载进度: {progress:.1f}%")
-            
-            return {
-                'success': True,
-                'file_path': str(save_path),
-                'file_size': downloaded
-            }
-            
+            url = self._extract_url(raw_url)
+            if self._is_douyin_url(url):
+                return self._download_douyin(url, output_dir)
+
+            target_dir = Path(output_dir) if output_dir else self.download_dir
+            target_dir.mkdir(parents=True, exist_ok=True)
+            before = set(target_dir.iterdir())
+
+            output_template = str(target_dir / "%(extractor_key)s-%(title).80s.%(ext)s")
+            args = [
+                "--no-playlist",
+                "-f",
+                "bv*+ba/b",
+                "--merge-output-format",
+                "mp4",
+                "--print-json",
+                "-o",
+                output_template,
+                *self._cookie_args(url),
+                url,
+            ]
+
+            result = self._run_ytdlp(args, timeout=600)
+            if result.returncode != 0:
+                return {
+                    "success": False,
+                    "error": self._format_error(result.stderr),
+                }
+
+            info = self._parse_info_from_stdout(result.stdout)
+            downloaded = self._find_downloaded_file(target_dir, before)
+            if not downloaded:
+                maybe_path = info.get("filepath") or info.get("_filename")
+                if maybe_path and Path(maybe_path).exists():
+                    downloaded = Path(maybe_path)
+
+            if not downloaded or not downloaded.exists():
+                return {"success": False, "error": "下载完成但未找到输出文件"}
+
+            data = self._normalize_info(info, url, downloaded)
+            data["file_path"] = str(downloaded)
+            return data
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": "yt-dlp 下载超时"}
         except Exception as e:
-            logger.error(f"下载视频失败: {e}")
-            return {
-                'success': False,
-                'error': str(e)
-            }
+            logger.exception("下载视频失败")
+            return {"success": False, "error": str(e)}
+
+    async def download_video(self, video_url: str, save_path: str) -> Dict:
+        """兼容旧调用：现在 video_url 可以直接传原始页面链接。"""
+        result = await self.download(video_url, str(Path(save_path).parent))
+        if not result.get("success"):
+            return result
+
+        downloaded = Path(result["file_path"])
+        save_path_obj = Path(save_path)
+        if downloaded.resolve() != save_path_obj.resolve():
+            save_path_obj.parent.mkdir(parents=True, exist_ok=True)
+            if save_path_obj.exists():
+                save_path_obj.unlink()
+            downloaded.replace(save_path_obj)
+            result["file_path"] = str(save_path_obj)
+            result["video_file"] = str(save_path_obj)
+            result["file_size"] = save_path_obj.stat().st_size
+        return result
+
+    def _format_error(self, stderr: str) -> str:
+        text = (stderr or "").strip()
+        if not text:
+            return "yt-dlp 执行失败"
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        tail = "\n".join(lines[-6:])
+        if "cookies" in tail.lower() or "login" in tail.lower():
+            return f"{tail}\n请确认已在 Chrome 登录对应平台，并允许 yt-dlp 读取浏览器 Cookie。"
+        return tail
 
 
-# 使用示例
-async def example():
-    """使用示例"""
-    parser = LocalVideoParser()
-    
-    # 解析抖音视频
-    print("测试抖音解析...")
-    result = await parser.parse("https://v.douyin.com/xxxxx/")
-    print(result)
-    
-    # 解析小红书笔记
-    print("\n测试小红书解析...")
-    result = await parser.parse("https://www.xiaohongshu.com/explore/xxxxx")
-    print(result)
-
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    asyncio.run(example())
+    parser = LocalVideoParser()
+    test = sys.argv[1] if len(sys.argv) > 1 else ""
+    if not test:
+        print("用法: python local_video_parser.py <视频链接>")
+        raise SystemExit(1)
+    print(json.dumps(parser.download_sync(test), ensure_ascii=False, indent=2))

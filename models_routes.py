@@ -39,7 +39,9 @@ def add_model():
             base_url=data.get('base_url'),
             model_provider=data.get('model_provider'),
             model_name=data.get('model_name'),
-            custom_prompt=data.get('custom_prompt', '')
+            custom_prompt=data.get('custom_prompt', ''),
+            max_tokens=data.get('max_tokens'),
+            temperature=data.get('temperature')
         )
         
         if success:
@@ -70,7 +72,9 @@ def update_model():
                 base_url=data.get('base_url'),
                 model_provider=data.get('model_provider'),
                 model_name=data.get('model_name'),
-                custom_prompt=data.get('custom_prompt')
+                custom_prompt=data.get('custom_prompt'),
+                max_tokens=data.get('max_tokens'),
+                temperature=data.get('temperature')
             )
         else:
             # 别名未改变，直接更新
@@ -80,7 +84,9 @@ def update_model():
                 base_url=data.get('base_url'),
                 model_provider=data.get('model_provider'),
                 model_name=data.get('model_name'),
-                custom_prompt=data.get('custom_prompt')
+                custom_prompt=data.get('custom_prompt'),
+                max_tokens=data.get('max_tokens'),
+                temperature=data.get('temperature')
             )
         
         if success:
