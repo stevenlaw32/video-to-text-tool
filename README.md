@@ -207,8 +207,6 @@ AI 智能整理（OpenAI / Claude / 通义千问 ...）
 
 项目提供了对应的 `.example` 模板文件，clone 后按模板创建即可。
 
-详见 [README_SECURITY.md](README_SECURITY.md)
-
 ---
 
 ## 许可证
