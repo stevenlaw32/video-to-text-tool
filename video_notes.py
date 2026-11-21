@@ -127,7 +127,7 @@ def get_ai_client(
             model_name,
             prompt,
             model_config.get("max_tokens"),
-            model_config.get("temperature", 0.7),
+            model_config.get("temperature"),
             model_config.get("reasoning_effort"),
             model_config.get("api_mode", "auto"),
             model_config.get("prompt_cache_ttl", "auto"),
@@ -141,7 +141,7 @@ def get_ai_client(
     client = OpenAI(api_key=api_key, base_url=os.getenv("OPENAI_BASE_URL"))
     model_name = os.getenv("MODEL_NAME", "gpt-4o")
     return (
-        client, model_name, prompt, None, 0.7,
+        client, model_name, prompt, None, None,
         os.getenv("REASONING_EFFORT", "auto"),
         os.getenv("OPENAI_API_MODE", "auto"),
         os.getenv("PROMPT_CACHE_TTL", "auto"),

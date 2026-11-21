@@ -19,13 +19,19 @@ class _CreateRecorder:
         return self.response
 
 
+class _UnavailableResponses:
+    def create(self, **kwargs):
+        error = RuntimeError("unknown endpoint")
+        error.status_code = 404
+        raise error
+
+
 class OpenAICompatTests(unittest.TestCase):
-    def test_gpt62_auto_uses_responses_and_sanitizes_parameters(self):
+    def test_auto_prefers_responses_without_model_specific_defaults(self):
         mode, params = build_request(
-            model="gpt-6.2-sol",
+            model="future-model",
             user_message="整理这段文字",
             developer_prompt="长期复用的规则",
-            temperature=0.7,
             max_tokens=1200,
             reasoning_effort="auto",
             api_mode="auto",
@@ -37,24 +43,25 @@ class OpenAICompatTests(unittest.TestCase):
         self.assertNotIn("temperature", params)
         self.assertNotIn("max_tokens", params)
         self.assertEqual(params["max_output_tokens"], 1200)
-        self.assertEqual(params["reasoning"], {"effort": "medium"})
-        self.assertEqual(params["prompt_cache_options"], {"ttl": "30m"})
+        self.assertNotIn("reasoning", params)
+        self.assertNotIn("prompt_cache_options", params)
         self.assertEqual(params["input"][0]["role"], "developer")
         self.assertEqual(params["input"][0]["content"], "长期复用的规则")
         self.assertEqual(params["input"][-1]["role"], "user")
 
-    def test_legacy_none_and_minimal_migrate_to_low(self):
-        self.assertEqual(resolve_reasoning_effort("gpt-6.2-astra", "none"), "low")
-        self.assertEqual(resolve_reasoning_effort("gpt-6.2-sol", "minimal"), "low")
-        self.assertEqual(resolve_reasoning_effort("openai/gpt-6.2-sol", "auto"), "medium")
+    def test_reasoning_effort_is_explicit_and_version_agnostic(self):
+        self.assertIsNone(resolve_reasoning_effort("auto"))
+        self.assertEqual(resolve_reasoning_effort("none"), "none")
+        self.assertEqual(resolve_reasoning_effort("minimal"), "minimal")
+        self.assertEqual(resolve_reasoning_effort("medium"), "medium")
 
-    def test_non_gpt62_auto_keeps_chat_compatibility(self):
+    def test_explicit_chat_keeps_chat_compatibility(self):
         mode, params = build_request(
-            model="gpt-4o",
+            model="compatible-model",
             user_message="hello",
             developer_prompt="system",
             temperature=0.4,
-            api_mode="auto",
+            api_mode="chat",
         )
 
         self.assertEqual(mode, "chat")
@@ -62,22 +69,42 @@ class OpenAICompatTests(unittest.TestCase):
         self.assertNotIn("reasoning_effort", params)
         self.assertEqual(params["messages"][0]["role"], "system")
 
-    def test_gpt62_tools_reject_chat_completions(self):
-        with self.assertRaisesRegex(ValueError, "工具调用必须使用 Responses"):
-            build_request(
-                model="gpt-6.2-astra",
-                user_message="hello",
-                api_mode="chat",
-                tools=[{"type": "function", "name": "lookup"}],
-            )
+    def test_explicit_temperature_is_passed_through(self):
+        _, params = build_request(
+            model="reasoning-model",
+            user_message="hello",
+            temperature=0.7,
+            reasoning_effort="high",
+        )
+        self.assertEqual(params["reasoning"], {"effort": "high"})
+        self.assertEqual(params["temperature"], 0.7)
 
-    def test_gpt62_rejects_flex_service_tier(self):
-        with self.assertRaisesRegex(ValueError, "不支持 service_tier=flex"):
-            build_request(
-                model="gpt-6.2-sol",
-                user_message="hello",
-                service_tier="flex",
-            )
+    def test_explicit_cache_and_service_tier_are_passed_through(self):
+        _, params = build_request(
+            model="any-model",
+            user_message="hello",
+            prompt_cache_ttl="12h",
+            service_tier="flex",
+        )
+        self.assertEqual(params["prompt_cache_options"], {"ttl": "12h"})
+        self.assertEqual(params["service_tier"], "flex")
+
+    def test_request_policy_does_not_branch_on_model_name(self):
+        _, first = build_request(
+            model="model-version-a",
+            user_message="hello",
+            reasoning_effort="low",
+            prompt_cache_ttl="30m",
+        )
+        _, second = build_request(
+            model="model-version-b",
+            user_message="hello",
+            reasoning_effort="low",
+            prompt_cache_ttl="30m",
+        )
+        first.pop("model")
+        second.pop("model")
+        self.assertEqual(first, second)
 
     def test_complete_text_calls_responses_client(self):
         recorder = _CreateRecorder(SimpleNamespace(output_text="完成"))
@@ -85,12 +112,33 @@ class OpenAICompatTests(unittest.TestCase):
 
         result = complete_text(
             client,
-            model="gpt-6.2-sol",
+            model="future-model",
             user_message="hello",
         )
 
         self.assertEqual(result, "完成")
         self.assertEqual(recorder.params["input"][-1]["content"], "hello")
+
+    def test_auto_falls_back_to_chat_when_responses_endpoint_is_missing(self):
+        chat_recorder = _CreateRecorder(
+            SimpleNamespace(
+                choices=[SimpleNamespace(message=SimpleNamespace(content="回退成功"))]
+            )
+        )
+        client = SimpleNamespace(
+            responses=_UnavailableResponses(),
+            chat=SimpleNamespace(completions=chat_recorder),
+        )
+
+        result = complete_text(
+            client,
+            model="provider-model",
+            user_message="hello",
+            api_mode="auto",
+        )
+
+        self.assertEqual(result, "回退成功")
+        self.assertEqual(chat_recorder.params["messages"][-1]["content"], "hello")
 
     def test_extract_response_text_falls_back_to_output_items(self):
         response = {

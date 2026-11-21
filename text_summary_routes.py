@@ -259,7 +259,7 @@ def _get_ai_client(model_alias):
         model_name = model_config['model_name']
         custom_prompt = model_config.get('custom_prompt', '')
         max_tokens = model_config.get('max_tokens')
-        temperature = model_config.get('temperature', 0.7)
+        temperature = model_config.get('temperature')
         reasoning_effort = model_config.get('reasoning_effort')
         api_mode = model_config.get('api_mode', 'auto')
         prompt_cache_ttl = model_config.get('prompt_cache_ttl', 'auto')
@@ -272,7 +272,7 @@ def _get_ai_client(model_alias):
         model_name = os.getenv('MODEL_NAME', 'gpt-4o')
         custom_prompt = ''
         max_tokens = None
-        temperature = 0.7
+        temperature = None
         reasoning_effort = os.getenv('REASONING_EFFORT', 'auto')
         api_mode = os.getenv('OPENAI_API_MODE', 'auto')
         prompt_cache_ttl = os.getenv('PROMPT_CACHE_TTL', 'auto')
@@ -429,7 +429,8 @@ def summarize():
         doc_log.add_log("═" * 40, "header")
         doc_log.add_log(f"🚀 开始文本总结任务", "header")
         doc_log.add_log(f"📄 文档数: {len(documents)}  |  模型: {model_name}", "info")
-        params_info = f"📋 模式: {'合并成一份' if merge else '分开处理'}  |  温度: {temperature}"
+        temperature_label = temperature if temperature is not None else '模型默认'
+        params_info = f"📋 模式: {'合并成一份' if merge else '分开处理'}  |  温度: {temperature_label}"
         if max_tokens:
             params_info += f"  |  max_tokens: {max_tokens}"
         doc_log.add_log(params_info, "info")

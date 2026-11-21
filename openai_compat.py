@@ -1,7 +1,7 @@
 """OpenAI Chat Completions / Responses API 兼容层。
 
-项目同时支持 OpenAI 官方接口和 OpenAI-compatible 供应商。这里集中处理
-GPT-6.2 Astra / Sol 的迁移规则，避免每条业务路由各自拼请求参数。
+这里仅处理端点之间稳定的协议差异，不根据模型名称猜测能力。模型参数保持
+显式配置；``auto`` 优先尝试 Responses，只有端点明确不可用时才回退 Chat。
 """
 
 from __future__ import annotations
@@ -9,62 +9,43 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
 
-GPT62_RESPONSES_PREFIXES = ("gpt-6.2-astra", "gpt-6.2-sol")
 API_MODES = {"auto", "chat", "responses"}
 REASONING_EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max"}
 CACHE_TTLS = {"auto", "off", "30m", "12h"}
 
 
-def is_gpt62_astra_or_sol(model: str) -> bool:
-    """Return whether the model belongs to the GPT-6.2 Astra/Sol API family."""
-    normalized = (model or "").strip().lower().rsplit("/", 1)[-1]
-    return normalized.startswith(GPT62_RESPONSES_PREFIXES)
-
-
-def resolve_api_mode(model: str, api_mode: Optional[str] = "auto", tools: Any = None) -> str:
-    """Resolve the endpoint while enforcing the GPT-6.2 tool-calling rule."""
+def resolve_api_mode(api_mode: Optional[str] = "auto") -> str:
+    """Resolve the preferred endpoint without inspecting the model identifier."""
     mode = (api_mode or "auto").strip().lower()
     if mode not in API_MODES:
         raise ValueError(f"不支持的 API 模式: {api_mode}")
-
-    if mode == "auto":
-        mode = "responses" if is_gpt62_astra_or_sol(model) else "chat"
-
-    if tools and is_gpt62_astra_or_sol(model) and mode != "responses":
-        raise ValueError("GPT-6.2 Astra/Sol 的工具调用必须使用 Responses API")
-    return mode
+    return "responses" if mode == "auto" else mode
 
 
-def resolve_reasoning_effort(model: str, value: Optional[str]) -> Optional[str]:
-    """Map legacy efforts to supported GPT-6.2 values and select new defaults."""
+def resolve_reasoning_effort(value: Optional[str]) -> Optional[str]:
+    """Return an explicitly configured effort; ``auto`` delegates to the model."""
     effort = (value or "auto").strip().lower()
     if effort == "auto":
-        return "medium" if is_gpt62_astra_or_sol(model) else None
+        return None
     if effort not in REASONING_EFFORTS:
         raise ValueError(f"不支持的推理强度: {value}")
-    if is_gpt62_astra_or_sol(model) and effort in {"none", "minimal"}:
-        return "low"
     return effort
 
 
-def resolve_cache_ttl(model: str, api_mode: str, value: Optional[str]) -> Optional[str]:
-    """Resolve the current prompt-cache TTL parameter for Responses requests."""
+def resolve_cache_ttl(api_mode: str, value: Optional[str]) -> Optional[str]:
+    """Only send a cache TTL when it was explicitly selected for Responses."""
     ttl = (value or "auto").strip().lower()
     if ttl not in CACHE_TTLS:
         raise ValueError(f"不支持的提示词缓存 TTL: {value}")
-    if api_mode != "responses" or ttl == "off":
+    if api_mode != "responses" or ttl in {"auto", "off"}:
         return None
-    if ttl == "auto":
-        return "30m" if is_gpt62_astra_or_sol(model) else None
     return ttl
 
 
-def validate_service_tier(model: str, value: Optional[str]) -> Optional[str]:
+def normalize_service_tier(value: Optional[str]) -> Optional[str]:
     tier = (value or "auto").strip().lower()
     if tier in {"", "auto"}:
         return None
-    if is_gpt62_astra_or_sol(model) and tier == "flex":
-        raise ValueError("GPT-6.2 Astra/Sol 不支持 service_tier=flex")
     return tier
 
 
@@ -117,10 +98,10 @@ def build_request(
     stream: bool = False,
 ) -> Tuple[str, Dict[str, Any]]:
     """Build a sanitized request and return ``(endpoint, parameters)``."""
-    mode = resolve_api_mode(model, api_mode, tools)
-    effort = resolve_reasoning_effort(model, reasoning_effort)
-    ttl = resolve_cache_ttl(model, mode, prompt_cache_ttl)
-    tier = validate_service_tier(model, service_tier)
+    mode = resolve_api_mode(api_mode)
+    effort = resolve_reasoning_effort(reasoning_effort)
+    ttl = resolve_cache_ttl(mode, prompt_cache_ttl)
+    tier = normalize_service_tier(service_tier)
 
     if mode == "responses":
         params: Dict[str, Any] = {
@@ -135,7 +116,7 @@ def build_request(
             params["prompt_cache_options"] = {"ttl": ttl}
         if tools:
             params["tools"] = tools
-        if not is_gpt62_astra_or_sol(model) and temperature is not None:
+        if temperature is not None:
             params["temperature"] = temperature
     else:
         params = {
@@ -148,7 +129,7 @@ def build_request(
             params["reasoning_effort"] = effort
         if tools:
             params["tools"] = tools
-        if not is_gpt62_astra_or_sol(model) and temperature is not None:
+        if temperature is not None:
             params["temperature"] = temperature
 
     if tier:
@@ -187,40 +168,100 @@ def extract_response_text(response: Any) -> str:
     return "".join(fragments)
 
 
+def _is_auto_mode(kwargs: Dict[str, Any]) -> bool:
+    return (kwargs.get("api_mode") or "auto").strip().lower() == "auto"
+
+
+def _endpoint_unavailable(error: Exception) -> bool:
+    """Recognize errors that safely indicate the Responses endpoint is absent."""
+    status_code = getattr(error, "status_code", None)
+    if status_code in {404, 405, 501}:
+        return True
+    message = str(error).lower()
+    return any(
+        marker in message
+        for marker in (
+            "unknown endpoint",
+            "unsupported endpoint",
+            "responses endpoint is not supported",
+            "responses api is not supported",
+        )
+    )
+
+
+def _request_modes(kwargs: Dict[str, Any]) -> Tuple[str, ...]:
+    if _is_auto_mode(kwargs):
+        return ("responses", "chat")
+    return (resolve_api_mode(kwargs.get("api_mode")),)
+
+
 def complete_text(client: Any, **kwargs: Any) -> str:
     """Create one text response through the selected endpoint."""
-    mode, params = build_request(**kwargs)
-    if mode == "responses":
-        responses = getattr(client, "responses", None)
-        if responses is None:
-            raise RuntimeError("当前 openai SDK 不支持 Responses API，请升级到 openai 3.x")
-        response = responses.create(**params)
-    else:
-        response = client.chat.completions.create(**params)
-    return extract_response_text(response)
+    modes = _request_modes(kwargs)
+    for index, mode in enumerate(modes):
+        request_kwargs = dict(kwargs, api_mode=mode)
+        _, params = build_request(**request_kwargs)
+        try:
+            if mode == "responses":
+                responses = getattr(client, "responses", None)
+                if responses is None:
+                    if len(modes) > 1:
+                        continue
+                    raise RuntimeError("当前 openai SDK 不支持 Responses API，请升级到 openai 3.x")
+                response = responses.create(**params)
+            else:
+                response = client.chat.completions.create(**params)
+            return extract_response_text(response)
+        except Exception as error:
+            can_fallback = (
+                index + 1 < len(modes)
+                and not kwargs.get("tools")
+                and _endpoint_unavailable(error)
+            )
+            if not can_fallback:
+                raise
+    raise RuntimeError("没有可用的模型调用端点")
 
 
 def stream_text(client: Any, **kwargs: Any) -> Iterator[str]:
     """Yield text deltas from Chat Completions or Responses streaming events."""
-    mode, params = build_request(stream=True, **kwargs)
-    if mode == "responses":
-        responses = getattr(client, "responses", None)
-        if responses is None:
-            raise RuntimeError("当前 openai SDK 不支持 Responses API，请升级到 openai 3.x")
-        events = responses.create(**params)
-        for event in events:
-            if _get_value(event, "type") == "response.output_text.delta":
-                delta = _get_value(event, "delta")
-                if delta:
-                    yield str(delta)
-        return
+    modes = _request_modes(kwargs)
+    for index, mode in enumerate(modes):
+        request_kwargs = dict(kwargs, api_mode=mode)
+        _, params = build_request(stream=True, **request_kwargs)
+        emitted = False
+        try:
+            if mode == "responses":
+                responses = getattr(client, "responses", None)
+                if responses is None:
+                    if len(modes) > 1:
+                        continue
+                    raise RuntimeError("当前 openai SDK 不支持 Responses API，请升级到 openai 3.x")
+                for event in responses.create(**params):
+                    if _get_value(event, "type") == "response.output_text.delta":
+                        delta = _get_value(event, "delta")
+                        if delta:
+                            emitted = True
+                            yield str(delta)
+                return
 
-    chunks = client.chat.completions.create(**params)
-    for chunk in chunks:
-        choices = _get_value(chunk, "choices", []) or []
-        if not choices:
-            continue
-        delta = _get_value(choices[0], "delta")
-        content = _get_value(delta, "content")
-        if content:
-            yield str(content)
+            for chunk in client.chat.completions.create(**params):
+                choices = _get_value(chunk, "choices", []) or []
+                if not choices:
+                    continue
+                delta = _get_value(choices[0], "delta")
+                content = _get_value(delta, "content")
+                if content:
+                    emitted = True
+                    yield str(content)
+            return
+        except Exception as error:
+            can_fallback = (
+                not emitted
+                and index + 1 < len(modes)
+                and not kwargs.get("tools")
+                and _endpoint_unavailable(error)
+            )
+            if not can_fallback:
+                raise
+    raise RuntimeError("没有可用的模型调用端点")

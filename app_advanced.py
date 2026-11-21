@@ -489,7 +489,7 @@ def process_batch():
                     ai_model = os.getenv('MODEL_NAME', 'gpt-4o')
                     model_custom_prompt = custom_prompt
                     ai_max_tokens = None
-                    ai_temperature = 0.7
+                    ai_temperature = None
                     ai_reasoning_effort = os.getenv('REASONING_EFFORT', 'auto')
                     ai_api_mode = os.getenv('OPENAI_API_MODE', 'auto')
                     ai_prompt_cache_ttl = os.getenv('PROMPT_CACHE_TTL', 'auto')
@@ -503,7 +503,7 @@ def process_batch():
                     ai_model = model_config['model_name']
                     model_custom_prompt = model_config.get('custom_prompt') or custom_prompt
                     ai_max_tokens = model_config.get('max_tokens')
-                    ai_temperature = model_config.get('temperature', 0.7)
+                    ai_temperature = model_config.get('temperature')
                     ai_reasoning_effort = model_config.get('reasoning_effort')
                     ai_api_mode = model_config.get('api_mode', 'auto')
                     ai_prompt_cache_ttl = model_config.get('prompt_cache_ttl', 'auto')

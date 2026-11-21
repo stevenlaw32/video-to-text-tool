@@ -9,18 +9,18 @@
   ],
   "models": [
     {
-      "alias": "示例供应商-gpt-6.2-sol",
+      "alias": "示例供应商-example-model",
       "provider_alias": "示例供应商",
       "api_key": "your-api-key-here",
       "base_url": "https://api.example.com/v1",
       "model_provider": "openai",
-      "model_name": "gpt-6.2-sol",
+      "model_name": "example-model",
       "api_mode": "auto",
-      "reasoning_effort": "medium",
-      "prompt_cache_ttl": "30m",
-      "service_tier": "standard",
+      "reasoning_effort": "auto",
+      "prompt_cache_ttl": "auto",
+      "service_tier": "auto",
       "custom_prompt": ""
     }
   ],
-  "active_model": "示例供应商-gpt-6.2-sol"
+  "active_model": "示例供应商-example-model"
 }

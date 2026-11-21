@@ -29,7 +29,7 @@ class APIConfig:
             'base_url': 'https://api.openai.com/v1',
             'model_provider': 'openai',
             'model_name': 'gpt-4o',
-            'temperature': 0.7,
+            'temperature': None,
             'max_tokens': 4000,
             'api_mode': 'auto',
             'reasoning_effort': 'auto',
