@@ -39,6 +39,7 @@ MISSING=""
 for pkg in flask openai dotenv requests; do
     python3 -c "import $pkg" 2>/dev/null || MISSING="$MISSING $pkg"
 done
+python3 -c "from importlib.metadata import version; assert int(version('openai').split('.')[0]) >= 3" 2>/dev/null || MISSING="$MISSING openai>=3"
 
 if [ -n "$MISSING" ]; then
     echo "⚠️  检测到缺少依赖:$MISSING"

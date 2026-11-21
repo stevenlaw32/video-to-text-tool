@@ -6,6 +6,7 @@
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 from werkzeug.utils import secure_filename
 from openai import OpenAI
+from openai_compat import complete_text
 from models_config import ModelsConfig
 import json
 import logging
@@ -188,6 +189,9 @@ def _get_ai_client(model_alias):
         max_tokens = model_config.get('max_tokens')
         temperature = model_config.get('temperature', 0.7)
         reasoning_effort = model_config.get('reasoning_effort')
+        api_mode = model_config.get('api_mode', 'auto')
+        prompt_cache_ttl = model_config.get('prompt_cache_ttl', 'auto')
+        service_tier = model_config.get('service_tier', 'auto')
     else:
         client = OpenAI(
             api_key=os.getenv('OPENAI_API_KEY'),
@@ -197,9 +201,15 @@ def _get_ai_client(model_alias):
         custom_prompt = ''
         max_tokens = None
         temperature = 0.7
-        reasoning_effort = None
+        reasoning_effort = os.getenv('REASONING_EFFORT', 'auto')
+        api_mode = os.getenv('OPENAI_API_MODE', 'auto')
+        prompt_cache_ttl = os.getenv('PROMPT_CACHE_TTL', 'auto')
+        service_tier = os.getenv('SERVICE_TIER', 'auto')
 
-    return client, model_name, custom_prompt, max_tokens, temperature, reasoning_effort
+    return (
+        client, model_name, custom_prompt, max_tokens, temperature,
+        reasoning_effort, api_mode, prompt_cache_ttl, service_tier
+    )
 
 
 def _build_image_prompt(text, title, custom_prompt=None):
@@ -350,7 +360,10 @@ def summarize_images():
         user_prompt = data.get('custom_prompt', '')
         merge = data.get('merge', True)
 
-        client, model_name, model_prompt, max_tokens, temperature, reasoning_effort = _get_ai_client(model_alias)
+        (
+            client, model_name, model_prompt, max_tokens, temperature,
+            reasoning_effort, api_mode, prompt_cache_ttl, service_tier
+        ) = _get_ai_client(model_alias)
         effective_prompt = user_prompt or model_prompt or None
 
         image_log.start()
@@ -367,24 +380,19 @@ def summarize_images():
             t0 = time.time()
             if label:
                 image_log.add_log(f"📡 调用 AI: {label}", "info")
-            request_params = {
-                'model': model_name,
-                'messages': [
-                    {"role": "system", "content": "你是一个专业的图片文字分析和内容整理助手。"},
-                    {"role": "user", "content": prompt_text}
-                ]
-            }
-            if temperature is not None:
-                request_params['temperature'] = temperature
-            if max_tokens:
-                request_params['max_tokens'] = max_tokens
-            if reasoning_effort:
-                request_params['extra_body'] = {
-                    'reasoning_effort': reasoning_effort
-                }
-            resp = client.chat.completions.create(**request_params)
+            text = complete_text(
+                client,
+                model=model_name,
+                user_message=prompt_text,
+                developer_prompt="你是一个专业的图片文字分析和内容整理助手。",
+                temperature=temperature,
+                max_tokens=max_tokens,
+                reasoning_effort=reasoning_effort,
+                api_mode=api_mode,
+                prompt_cache_ttl=prompt_cache_ttl,
+                service_tier=service_tier
+            )
             elapsed = time.time() - t0
-            text = resp.choices[0].message.content
             image_log.add_log(f"✓ 完成，用时 {elapsed:.1f}s，输出 {len(text)} 字符", "success")
             return text
 

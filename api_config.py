@@ -31,6 +31,10 @@ class APIConfig:
             'model_name': 'gpt-4o',
             'temperature': 0.7,
             'max_tokens': 4000,
+            'api_mode': 'auto',
+            'reasoning_effort': 'auto',
+            'prompt_cache_ttl': 'auto',
+            'service_tier': 'auto',
             'default_system_prompt': get_default_prompt()
         }
     
@@ -76,6 +80,18 @@ class APIConfig:
     def get_default_system_prompt(self) -> str:
         """获取默认系统提示词"""
         return os.getenv('DEFAULT_SYSTEM_PROMPT', self.default_config['default_system_prompt'])
+
+    def get_api_mode(self) -> str:
+        return os.getenv('OPENAI_API_MODE', self.default_config['api_mode'])
+
+    def get_reasoning_effort(self) -> str:
+        return os.getenv('REASONING_EFFORT', self.default_config['reasoning_effort'])
+
+    def get_prompt_cache_ttl(self) -> str:
+        return os.getenv('PROMPT_CACHE_TTL', self.default_config['prompt_cache_ttl'])
+
+    def get_service_tier(self) -> str:
+        return os.getenv('SERVICE_TIER', self.default_config['service_tier'])
     
     def get_all_config(self) -> Dict[str, any]:
         """获取所有配置"""
@@ -86,6 +102,10 @@ class APIConfig:
             'model_provider': self.get_model_provider(),
             'temperature': self.get_temperature(),
             'max_tokens': self.get_max_tokens(),
+            'api_mode': self.get_api_mode(),
+            'reasoning_effort': self.get_reasoning_effort(),
+            'prompt_cache_ttl': self.get_prompt_cache_ttl(),
+            'service_tier': self.get_service_tier(),
             'default_system_prompt': self.get_default_system_prompt()
         }
     
@@ -121,6 +141,10 @@ class APIConfig:
                 'model_provider': 'MODEL_PROVIDER',
                 'temperature': 'TEMPERATURE',
                 'max_tokens': 'MAX_TOKENS',
+                'api_mode': 'OPENAI_API_MODE',
+                'reasoning_effort': 'REASONING_EFFORT',
+                'prompt_cache_ttl': 'PROMPT_CACHE_TTL',
+                'service_tier': 'SERVICE_TIER',
                 'default_system_prompt': 'DEFAULT_SYSTEM_PROMPT'
             }
             
@@ -183,6 +207,10 @@ class APIConfig:
                 'model_provider': self.get_model_provider(),
                 'temperature': self.get_temperature(),
                 'max_tokens': self.get_max_tokens(),
+                'api_mode': self.get_api_mode(),
+                'reasoning_effort': self.get_reasoning_effort(),
+                'prompt_cache_ttl': self.get_prompt_cache_ttl(),
+                'service_tier': self.get_service_tier(),
                 'default_system_prompt': self.get_default_system_prompt()
             }
             

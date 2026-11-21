@@ -9,8 +9,21 @@ from flask import Blueprint, request, jsonify
 from models_config import ModelsConfig
 from prompt_presets import DEFAULT_PRESET_ID, list_presets
 from openai import OpenAI
+from openai_compat import build_request, complete_text
 
 models_bp = Blueprint('models', __name__, url_prefix='/api/models')
+
+
+def _validate_runtime_options(data):
+    """Validate endpoint/model options before persisting them."""
+    build_request(
+        model=data.get('model_name') or '',
+        user_message='validation',
+        api_mode=data.get('api_mode', 'auto'),
+        reasoning_effort=data.get('reasoning_effort', 'auto'),
+        prompt_cache_ttl=data.get('prompt_cache_ttl', 'auto'),
+        service_tier=data.get('service_tier', 'auto')
+    )
 
 
 def _build_model_list_urls(base_url):
@@ -226,6 +239,7 @@ def add_model():
     """添加新的模型配置"""
     try:
         data = request.json
+        _validate_runtime_options(data)
         config = ModelsConfig()
         
         success = config.add_model(
@@ -237,14 +251,20 @@ def add_model():
             custom_prompt=data.get('custom_prompt', ''),
             max_tokens=data.get('max_tokens'),
             temperature=data.get('temperature'),
-            provider_alias=data.get('provider_alias')
+            provider_alias=data.get('provider_alias'),
+            api_mode=data.get('api_mode', 'auto'),
+            reasoning_effort=data.get('reasoning_effort', 'auto'),
+            prompt_cache_ttl=data.get('prompt_cache_ttl', 'auto'),
+            service_tier=data.get('service_tier', 'auto')
         )
         
         if success:
             return jsonify({'success': True, 'message': '模型添加成功'})
         else:
             return jsonify({'success': False, 'error': '模型别名已存在'}), 400
-            
+
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -254,6 +274,7 @@ def update_model():
     """更新模型配置"""
     try:
         data = request.json
+        _validate_runtime_options(data)
         config = ModelsConfig()
         
         original_alias = data.get('original_alias')
@@ -271,7 +292,11 @@ def update_model():
                 custom_prompt=data.get('custom_prompt'),
                 max_tokens=data.get('max_tokens'),
                 temperature=data.get('temperature'),
-                provider_alias=data.get('provider_alias')
+                provider_alias=data.get('provider_alias'),
+                api_mode=data.get('api_mode'),
+                reasoning_effort=data.get('reasoning_effort'),
+                prompt_cache_ttl=data.get('prompt_cache_ttl'),
+                service_tier=data.get('service_tier')
             )
         else:
             # 别名未改变，直接更新
@@ -284,14 +309,20 @@ def update_model():
                 custom_prompt=data.get('custom_prompt'),
                 max_tokens=data.get('max_tokens'),
                 temperature=data.get('temperature'),
-                provider_alias=data.get('provider_alias')
+                provider_alias=data.get('provider_alias'),
+                api_mode=data.get('api_mode'),
+                reasoning_effort=data.get('reasoning_effort'),
+                prompt_cache_ttl=data.get('prompt_cache_ttl'),
+                service_tier=data.get('service_tier')
             )
         
         if success:
             return jsonify({'success': True, 'message': '模型更新成功'})
         else:
             return jsonify({'success': False, 'error': '模型不存在或新别名已被使用'}), 404
-            
+
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -376,21 +407,28 @@ def test_connection():
             base_url=data.get('base_url')
         )
         
-        # 发送一个简单的测试请求
-        response = client.chat.completions.create(
+        response_text = complete_text(
+            client,
             model=data.get('model_name'),
-            messages=[
-                {"role": "user", "content": "Hello"}
-            ],
-            max_tokens=10
+            user_message='Hello',
+            max_tokens=10,
+            api_mode=data.get('api_mode', 'auto'),
+            reasoning_effort=data.get('reasoning_effort', 'auto'),
+            prompt_cache_ttl=data.get('prompt_cache_ttl', 'auto'),
+            service_tier=data.get('service_tier', 'auto')
         )
         
         return jsonify({
             'success': True,
             'message': '连接测试成功！',
-            'response': response.choices[0].message.content
+            'response': response_text
         })
         
+    except ValueError as e:
+        return jsonify({
+            'success': False,
+            'error': f'连接测试失败: {str(e)}'
+        }), 400
     except Exception as e:
         return jsonify({
             'success': False,

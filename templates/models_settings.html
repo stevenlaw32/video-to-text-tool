@@ -240,7 +240,46 @@
                                     oninput="document.getElementById('temperatureRange').value = this.value"
                                 >
                             </div>
-                            <p class="text-xs text-gray-400 mt-1">0=精确  0.7=平衡  2=创意</p>
+                            <p class="text-xs text-gray-400 mt-1">GPT-6.2 Astra/Sol 会自动忽略此参数</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 mt-4">
+                        <div>
+                            <label for="apiMode" class="block text-xs font-medium text-gray-600 mb-1">API 模式</label>
+                            <select id="apiMode" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm">
+                                <option value="auto">自动（GPT-6.2 使用 Responses）</option>
+                                <option value="responses">Responses API</option>
+                                <option value="chat">Chat Completions</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="reasoningEffort" class="block text-xs font-medium text-gray-600 mb-1">推理强度</label>
+                            <select id="reasoningEffort" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm">
+                                <option value="auto">自动（GPT-6.2 新集成用 medium）</option>
+                                <option value="low">low</option>
+                                <option value="medium">medium</option>
+                                <option value="high">high</option>
+                                <option value="xhigh">xhigh</option>
+                                <option value="max">max</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="promptCacheTtl" class="block text-xs font-medium text-gray-600 mb-1">提示词缓存 TTL</label>
+                            <select id="promptCacheTtl" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm">
+                                <option value="auto">自动（GPT-6.2 使用 30m）</option>
+                                <option value="off">关闭显式 TTL</option>
+                                <option value="30m">30m</option>
+                                <option value="12h">12h</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="serviceTier" class="block text-xs font-medium text-gray-600 mb-1">Service Tier</label>
+                            <select id="serviceTier" class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm">
+                                <option value="auto">自动</option>
+                                <option value="standard">standard</option>
+                                <option value="priority">priority</option>
+                                <option value="flex">flex（Astra/Sol 不支持）</option>
+                            </select>
                         </div>
                     </div>
                 </div>
@@ -685,6 +724,10 @@
                 const temp = model.temperature != null ? model.temperature : 0.7;
                 document.getElementById('temperature').value = temp;
                 document.getElementById('temperatureRange').value = temp;
+                document.getElementById('apiMode').value = model.api_mode || 'auto';
+                document.getElementById('reasoningEffort').value = model.reasoning_effort || 'auto';
+                document.getElementById('promptCacheTtl').value = model.prompt_cache_ttl || 'auto';
+                document.getElementById('serviceTier').value = model.service_tier || 'auto';
                 document.getElementById('customPrompt').value = model.custom_prompt || '';
                 document.getElementById('configForm').classList.remove('hidden');
                 resetAvailableModelsList('已加载保存模型；如需添加其它模型，请点击“增加模型”。');
@@ -720,6 +763,10 @@
             document.getElementById('maxTokens').value = '';
             document.getElementById('temperature').value = '0.7';
             document.getElementById('temperatureRange').value = '0.7';
+            document.getElementById('apiMode').value = 'auto';
+            document.getElementById('reasoningEffort').value = 'auto';
+            document.getElementById('promptCacheTtl').value = 'auto';
+            document.getElementById('serviceTier').value = 'auto';
             document.getElementById('customPrompt').value = '';
         }
 
@@ -1061,7 +1108,11 @@
                 model_name: modelName,
                 custom_prompt: document.getElementById('customPrompt').value,
                 max_tokens: maxTokensVal ? parseInt(maxTokensVal) : null,
-                temperature: temperatureVal !== '' ? parseFloat(temperatureVal) : null
+                temperature: temperatureVal !== '' ? parseFloat(temperatureVal) : null,
+                api_mode: document.getElementById('apiMode').value,
+                reasoning_effort: document.getElementById('reasoningEffort').value,
+                prompt_cache_ttl: document.getElementById('promptCacheTtl').value,
+                service_tier: document.getElementById('serviceTier').value
             };
             
             try {
@@ -1160,7 +1211,11 @@
                 const formData = {
                     api_key: document.getElementById('apiKey').value,
                     base_url: document.getElementById('baseUrl').value,
-                    model_name: document.getElementById('modelName').value
+                    model_name: document.getElementById('modelName').value,
+                    api_mode: document.getElementById('apiMode').value,
+                    reasoning_effort: document.getElementById('reasoningEffort').value,
+                    prompt_cache_ttl: document.getElementById('promptCacheTtl').value,
+                    service_tier: document.getElementById('serviceTier').value
                 };
                 
                 const response = await fetch('/api/models/test_connection', {
@@ -1425,6 +1480,10 @@
                 const temp = savedModel.temperature != null ? savedModel.temperature : 0.7;
                 document.getElementById('temperature').value = temp;
                 document.getElementById('temperatureRange').value = temp;
+                document.getElementById('apiMode').value = savedModel.api_mode || 'auto';
+                document.getElementById('reasoningEffort').value = savedModel.reasoning_effort || 'auto';
+                document.getElementById('promptCacheTtl').value = savedModel.prompt_cache_ttl || 'auto';
+                document.getElementById('serviceTier').value = savedModel.service_tier || 'auto';
                 document.getElementById('customPrompt').value = savedModel.custom_prompt || '';
                 showStatus(`已加载保存过的模型：${getModelDisplayName(savedModel)}`, 'success');
                 return;
@@ -1435,6 +1494,10 @@
             document.getElementById('maxTokens').value = '';
             document.getElementById('temperature').value = '0.7';
             document.getElementById('temperatureRange').value = '0.7';
+            document.getElementById('apiMode').value = 'auto';
+            document.getElementById('reasoningEffort').value = 'auto';
+            document.getElementById('promptCacheTtl').value = 'auto';
+            document.getElementById('serviceTier').value = 'auto';
             document.getElementById('customPrompt').value = '';
             showStatus(`已选择模型：${modelId}，设置参数和提示词后保存`, 'success');
         }

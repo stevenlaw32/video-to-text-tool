@@ -25,6 +25,7 @@ from image_summary_routes import image_summary_bp
 from models_config import ModelsConfig
 from prompt_presets import get_default_prompt
 from log_stream import log_stream
+from openai_compat import complete_text
 
 # 尝试导入视频链接解析路由
 try:
@@ -489,7 +490,10 @@ def process_batch():
                     model_custom_prompt = custom_prompt
                     ai_max_tokens = None
                     ai_temperature = 0.7
-                    ai_reasoning_effort = None
+                    ai_reasoning_effort = os.getenv('REASONING_EFFORT', 'auto')
+                    ai_api_mode = os.getenv('OPENAI_API_MODE', 'auto')
+                    ai_prompt_cache_ttl = os.getenv('PROMPT_CACHE_TTL', 'auto')
+                    ai_service_tier = os.getenv('SERVICE_TIER', 'auto')
                 else:
                     print(f"   模型别名: {model_alias} / {model_config['model_name']}")
                     client = OpenAI(
@@ -501,6 +505,9 @@ def process_batch():
                     ai_max_tokens = model_config.get('max_tokens')
                     ai_temperature = model_config.get('temperature', 0.7)
                     ai_reasoning_effort = model_config.get('reasoning_effort')
+                    ai_api_mode = model_config.get('api_mode', 'auto')
+                    ai_prompt_cache_ttl = model_config.get('prompt_cache_ttl', 'auto')
+                    ai_service_tier = model_config.get('service_tier', 'auto')
 
                 print(f"   使用{'自定义' if model_custom_prompt else '默认'}提示词")
                 print(f"   输出方式: {'合并' if merge_output else '分开'}")
@@ -540,24 +547,19 @@ def process_batch():
                 def _call_ai(prompt_text):
                     import time
                     t0 = time.time()
-                    req_params = {
-                        'model': ai_model,
-                        'messages': [
-                            {"role": "system", "content": "你是一个专业的内容整理助手，擅长将视频转录文本整理成结构化的文档。"},
-                            {"role": "user", "content": prompt_text}
-                        ]
-                    }
-                    if ai_temperature is not None:
-                        req_params['temperature'] = ai_temperature
-                    if ai_max_tokens:
-                        req_params['max_tokens'] = ai_max_tokens
-                    if ai_reasoning_effort:
-                        req_params['extra_body'] = {
-                            'reasoning_effort': ai_reasoning_effort
-                        }
-                    resp = client.chat.completions.create(**req_params)
+                    text = complete_text(
+                        client,
+                        model=ai_model,
+                        user_message=prompt_text,
+                        developer_prompt="你是一个专业的内容整理助手，擅长将视频转录文本整理成结构化的文档。",
+                        temperature=ai_temperature,
+                        max_tokens=ai_max_tokens,
+                        reasoning_effort=ai_reasoning_effort,
+                        api_mode=ai_api_mode,
+                        prompt_cache_ttl=ai_prompt_cache_ttl,
+                        service_tier=ai_service_tier
+                    )
                     elapsed = time.time() - t0
-                    text = resp.choices[0].message.content
                     print(f"   ✓ AI 完成，用时 {elapsed:.2f}s，输出 {len(text)} 字符")
                     return text
 

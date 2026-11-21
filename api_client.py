@@ -6,6 +6,7 @@
 from openai import OpenAI
 from typing import Optional, List, Dict, Any
 from api_config import APIConfig
+from openai_compat import complete_text, stream_text
 
 
 class UniversalAPIClient:
@@ -35,6 +36,10 @@ class UniversalAPIClient:
         self.temperature = self.config.get_temperature()
         self.max_tokens = self.config.get_max_tokens()
         self.default_system_prompt = self.config.get_default_system_prompt()
+        self.api_mode = self.config.get_api_mode()
+        self.reasoning_effort = self.config.get_reasoning_effort()
+        self.prompt_cache_ttl = self.config.get_prompt_cache_ttl()
+        self.service_tier = self.config.get_service_tier()
     
     def chat(
         self,
@@ -60,40 +65,23 @@ class UniversalAPIClient:
             str: AI 回复内容
         """
         try:
-            # 构建消息列表
-            messages = []
-            
-            # 添加系统提示词
             system_content = system_prompt or self.default_system_prompt
-            if system_content:
-                messages.append({"role": "system", "content": system_content})
-            
-            # 添加历史消息
-            if messages_history:
-                messages.extend(messages_history)
-            
-            # 添加当前用户消息
-            messages.append({"role": "user", "content": user_message})
-            
-            # 构建请求参数
-            request_params = {
-                'model': model or self.model_name,
-                'messages': messages
-            }
-            
-            # 只在有值时才添加temperature和max_tokens
             temp_value = temperature if temperature is not None else self.temperature
-            if temp_value is not None:
-                request_params['temperature'] = temp_value
-            
             tokens_value = max_tokens or self.max_tokens
-            if tokens_value is not None:
-                request_params['max_tokens'] = tokens_value
-            
-            # 发送请求
-            response = self.client.chat.completions.create(**request_params)
-            
-            return response.choices[0].message.content
+
+            return complete_text(
+                self.client,
+                model=model or self.model_name,
+                user_message=user_message,
+                developer_prompt=system_content,
+                messages_history=messages_history,
+                temperature=temp_value,
+                max_tokens=tokens_value,
+                api_mode=self.api_mode,
+                reasoning_effort=self.reasoning_effort,
+                prompt_cache_ttl=self.prompt_cache_ttl,
+                service_tier=self.service_tier
+            )
             
         except Exception as e:
             raise Exception(f"API 调用失败: {str(e)}")
@@ -330,28 +318,20 @@ class UniversalAPIClient:
             str: 流式返回的文本片段
         """
         try:
-            messages = []
-            
             system_content = system_prompt or self.default_system_prompt
-            if system_content:
-                messages.append({"role": "system", "content": system_content})
-            
-            if messages_history:
-                messages.extend(messages_history)
-            
-            messages.append({"role": "user", "content": user_message})
-            
-            stream = self.client.chat.completions.create(
+            yield from stream_text(
+                self.client,
                 model=model or self.model_name,
-                messages=messages,
+                user_message=user_message,
+                developer_prompt=system_content,
+                messages_history=messages_history,
                 temperature=temperature if temperature is not None else self.temperature,
                 max_tokens=max_tokens or self.max_tokens,
-                stream=True
+                api_mode=self.api_mode,
+                reasoning_effort=self.reasoning_effort,
+                prompt_cache_ttl=self.prompt_cache_ttl,
+                service_tier=self.service_tier
             )
-            
-            for chunk in stream:
-                if chunk.choices[0].delta.content is not None:
-                    yield chunk.choices[0].delta.content
                     
         except Exception as e:
             raise Exception(f"流式 API 调用失败: {str(e)}")

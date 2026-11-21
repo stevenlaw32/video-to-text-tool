@@ -13,7 +13,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -23,6 +23,7 @@ os.chdir(PROJECT_ROOT)
 load_dotenv(PROJECT_ROOT / ".env")
 
 from models_config import ModelsConfig
+from openai_compat import complete_text
 from prompt_presets import get_default_prompt, get_prompt
 
 
@@ -104,7 +105,10 @@ def build_transcript(mode: str, audio_text: str, ocr_text: str) -> str:
 def get_ai_client(
     model_alias: str = "",
     prompt_preset: str = "restructure",
-) -> Tuple[OpenAI, str, str, Optional[int], Optional[float], Optional[str], str]:
+) -> Tuple[
+    OpenAI, str, str, Optional[int], Optional[float], Optional[str],
+    str, str, str, str
+]:
     models_config = ModelsConfig(str(PROJECT_ROOT / "models.json"))
     model_config = None
     if model_alias:
@@ -125,6 +129,9 @@ def get_ai_client(
             model_config.get("max_tokens"),
             model_config.get("temperature", 0.7),
             model_config.get("reasoning_effort"),
+            model_config.get("api_mode", "auto"),
+            model_config.get("prompt_cache_ttl", "auto"),
+            model_config.get("service_tier", "auto"),
             display,
         )
 
@@ -133,7 +140,14 @@ def get_ai_client(
         raise ValueError("未找到可用的 AI 模型。请先在网页「多模型」里配置并设为当前模型。")
     client = OpenAI(api_key=api_key, base_url=os.getenv("OPENAI_BASE_URL"))
     model_name = os.getenv("MODEL_NAME", "gpt-4o")
-    return client, model_name, prompt, None, 0.7, None, model_name
+    return (
+        client, model_name, prompt, None, 0.7,
+        os.getenv("REASONING_EFFORT", "auto"),
+        os.getenv("OPENAI_API_MODE", "auto"),
+        os.getenv("PROMPT_CACHE_TTL", "auto"),
+        os.getenv("SERVICE_TIER", "auto"),
+        model_name,
+    )
 
 
 def summarize(
@@ -143,9 +157,10 @@ def summarize(
     model_alias: str = "",
     prompt_preset: str = "restructure",
 ) -> Tuple[str, str]:
-    client, model_name, prompt_tpl, max_tokens, temperature, reasoning_effort, display = get_ai_client(
-        model_alias, prompt_preset
-    )
+    (
+        client, model_name, prompt_tpl, max_tokens, temperature,
+        reasoning_effort, api_mode, prompt_cache_ttl, service_tier, display
+    ) = get_ai_client(model_alias, prompt_preset)
     tpl = prompt_tpl
     is_dual_source = (
         mode == "hybrid"
@@ -160,23 +175,19 @@ def summarize(
         header = f"# 标题：{title}\n\n" if title else ""
         prompt = header + tpl + "\n\n---\n\n转录内容：\n" + transcript
 
-    req_params: Dict = {
-        "model": model_name,
-        "messages": [
-            {"role": "system", "content": "你是一个专业的内容整理助手，擅长将视频转录文本整理成结构化的文档。"},
-            {"role": "user", "content": prompt},
-        ],
-    }
-    if temperature is not None:
-        req_params["temperature"] = temperature
-    if max_tokens:
-        req_params["max_tokens"] = max_tokens
-    if reasoning_effort:
-        req_params["extra_body"] = {"reasoning_effort": reasoning_effort}
-
     log(f"🤖 调用整理模型：{display} / {model_name}")
-    resp = client.chat.completions.create(**req_params)
-    text = (resp.choices[0].message.content or "").strip()
+    text = complete_text(
+        client,
+        model=model_name,
+        user_message=prompt,
+        developer_prompt="你是一个专业的内容整理助手，擅长将视频转录文本整理成结构化的文档。",
+        temperature=temperature,
+        max_tokens=max_tokens,
+        reasoning_effort=reasoning_effort,
+        api_mode=api_mode,
+        prompt_cache_ttl=prompt_cache_ttl,
+        service_tier=service_tier,
+    ).strip()
     log(f"✓ 整理完成：{len(text)} 字符")
     return text, display
 

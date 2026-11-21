@@ -1,6 +1,7 @@
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+from openai_compat import complete_text
 
 load_dotenv()
 
@@ -27,18 +28,17 @@ class AISummarizerV2:
             }
             prompt = style_prompts.get(style, style_prompts['tutorial'])
         
-        messages = [
-            {"role": "system", "content": "你是一个专业的内容整理助手。"},
-            {"role": "user", "content": f"{prompt}\n\n{text}"}
-        ]
-        
-        response = self.client.chat.completions.create(
+        return complete_text(
+            self.client,
             model=self.model,
-            messages=messages,
-            temperature=0.7
+            user_message=f"{prompt}\n\n{text}",
+            developer_prompt="你是一个专业的内容整理助手。",
+            temperature=0.7,
+            api_mode=os.getenv('OPENAI_API_MODE', 'auto'),
+            reasoning_effort=os.getenv('REASONING_EFFORT', 'auto'),
+            prompt_cache_ttl=os.getenv('PROMPT_CACHE_TTL', 'auto'),
+            service_tier=os.getenv('SERVICE_TIER', 'auto')
         )
-        
-        return response.choices[0].message.content
     
     def save_summary(self, summary, output_path):
         with open(output_path, 'w', encoding='utf-8') as f:

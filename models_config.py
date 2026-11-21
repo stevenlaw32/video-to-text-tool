@@ -210,7 +210,11 @@ class ModelsConfig:
     def add_model(self, alias: str, api_key: str, base_url: str, 
                   model_provider: str, model_name: str, custom_prompt: str = '',
                   max_tokens: Optional[int] = None, temperature: Optional[float] = None,
-                  provider_alias: Optional[str] = None) -> bool:
+                  provider_alias: Optional[str] = None,
+                  api_mode: Optional[str] = "auto",
+                  reasoning_effort: Optional[str] = "auto",
+                  prompt_cache_ttl: Optional[str] = "auto",
+                  service_tier: Optional[str] = "auto") -> bool:
         """
         添加新的模型配置
         
@@ -243,7 +247,11 @@ class ModelsConfig:
             "base_url": base_url,
             "model_provider": model_provider,
             "model_name": model_name,
-            "custom_prompt": custom_prompt
+            "custom_prompt": custom_prompt,
+            "api_mode": api_mode or "auto",
+            "reasoning_effort": reasoning_effort or "auto",
+            "prompt_cache_ttl": prompt_cache_ttl or "auto",
+            "service_tier": service_tier or "auto"
         }
         if max_tokens is not None:
             new_model["max_tokens"] = max_tokens
@@ -265,7 +273,11 @@ class ModelsConfig:
                      custom_prompt: Optional[str] = None,
                      max_tokens: Optional[int] = None,
                      temperature: Optional[float] = None,
-                     provider_alias: Optional[str] = None) -> bool:
+                     provider_alias: Optional[str] = None,
+                     api_mode: Optional[str] = None,
+                     reasoning_effort: Optional[str] = None,
+                     prompt_cache_ttl: Optional[str] = None,
+                     service_tier: Optional[str] = None) -> bool:
         """
         更新模型配置
         
@@ -306,6 +318,16 @@ class ModelsConfig:
             model["temperature"] = temperature
         else:
             model.pop("temperature", None)
+        for key, value in (
+            ("api_mode", api_mode),
+            ("reasoning_effort", reasoning_effort),
+            ("prompt_cache_ttl", prompt_cache_ttl),
+            ("service_tier", service_tier),
+        ):
+            if value:
+                model[key] = value
+            else:
+                model.pop(key, None)
 
         if provider_alias:
             self.save_provider(
@@ -325,7 +347,11 @@ class ModelsConfig:
                      custom_prompt: Optional[str] = None,
                      max_tokens: Optional[int] = None,
                      temperature: Optional[float] = None,
-                     provider_alias: Optional[str] = None) -> bool:
+                     provider_alias: Optional[str] = None,
+                     api_mode: Optional[str] = None,
+                     reasoning_effort: Optional[str] = None,
+                     prompt_cache_ttl: Optional[str] = None,
+                     service_tier: Optional[str] = None) -> bool:
         """
         重命名模型并更新配置
         
@@ -376,6 +402,16 @@ class ModelsConfig:
             old_model["temperature"] = temperature
         else:
             old_model.pop("temperature", None)
+        for key, value in (
+            ("api_mode", api_mode),
+            ("reasoning_effort", reasoning_effort),
+            ("prompt_cache_ttl", prompt_cache_ttl),
+            ("service_tier", service_tier),
+        ):
+            if value:
+                old_model[key] = value
+            else:
+                old_model.pop(key, None)
 
         if provider_alias:
             self.save_provider(
