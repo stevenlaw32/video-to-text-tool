@@ -16,7 +16,7 @@
                     <h1 class="text-3xl font-bold text-gray-800 mb-2">
                         <i class="fas fa-cog mr-3 text-indigo-600"></i>第三方 API 设置
                     </h1>
-                    <p class="text-gray-600">配置 AI 模型 API 以启用智能分析功能</p>
+                    <p class="text-gray-600">此页面仅保留界面样式，实际模型配置请使用“多模型”页面</p>
                 </div>
                 <button onclick="window.close(); setTimeout(()=>location.href='/',200)" class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors">
                     <i class="fas fa-times mr-2"></i>关闭页面
@@ -26,7 +26,7 @@
 
         <!-- Settings Form -->
         <div class="bg-white rounded-2xl shadow-xl p-8">
-            <form id="settingsForm" class="space-y-6">
+            <form id="settingsForm" class="space-y-6" novalidate>
                 <!-- API Key -->
                 <div>
                     <label for="apiKey" class="block text-sm font-semibold text-gray-700 mb-2">
@@ -169,10 +169,29 @@
 
                 <!-- Custom Prompt -->
                 <div>
-                    <label for="systemPrompt" class="block text-sm font-semibold text-gray-700 mb-2">
-                        <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>自定义提示词
-                        <span class="text-gray-500 text-xs font-normal ml-2">(可选)</span>
-                    </label>
+                    <div class="flex items-center justify-between mb-2">
+                        <label for="systemPrompt" class="text-sm font-semibold text-gray-700">
+                            <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>自定义提示词
+                            <span class="text-gray-500 text-xs font-normal ml-2">(可选)</span>
+                        </label>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-gray-400">默认模板</span>
+                            <button
+                                type="button"
+                                onclick="usePromptPreset('restructure')"
+                                class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                            >
+                                整理重排
+                            </button>
+                            <button
+                                type="button"
+                                onclick="usePromptPreset('faithful')"
+                                class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                            >
+                                尊重原文
+                            </button>
+                        </div>
+                    </div>
                     <p class="text-xs text-gray-600 mb-2">
                         <i class="fas fa-info-circle mr-1"></i>请在提示词中使用 <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">{transcript}</code> 作为占位符，将被替换为实际转录内容
                     </p>
@@ -181,18 +200,11 @@
                         name="systemPrompt"
                         rows="12"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm"
-                        placeholder="请你扮演一名"课程笔记精简&排版编辑"，对我提供的 Markdown 课程文档进行重排、精简和结构优化..."
+                        placeholder="留空则使用「整理重排」..."
                     ></textarea>
                     <div class="flex justify-between items-center mt-2">
-                        <button 
-                            type="button" 
-                            onclick="useDefaultPrompt()" 
-                            class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-                        >
-                            <i class="fas fa-undo mr-1"></i>使用默认提示词
-                        </button>
                         <p class="text-xs text-gray-500">
-                            设置 AI 整理转录文本的方式和风格
+                            点选「整理重排」或「尊重原文」填入模板，仍可再改
                         </p>
                     </div>
                 </div>
@@ -237,8 +249,8 @@
                         <span class="text-indigo-600 font-bold">1</span>
                     </div>
                     <div>
-                        <p class="font-semibold text-gray-700 mb-1">获取 API Key</p>
-                        <p>前往您选择的 AI 服务提供商官网注册账号并获取 API Key</p>
+                        <p class="font-semibold text-gray-700 mb-1">样式预留</p>
+                        <p>保留 API Key、Base URL、模型名称等字段布局，供后续重新启用时使用</p>
                     </div>
                 </div>
                 <div class="flex items-start">
@@ -246,8 +258,8 @@
                         <span class="text-indigo-600 font-bold">2</span>
                     </div>
                     <div>
-                        <p class="font-semibold text-gray-700 mb-1">填写配置信息</p>
-                        <p>在上方表单中填入 API Key、Base URL 和模型名称等必填信息</p>
+                        <p class="font-semibold text-gray-700 mb-1">本地交互</p>
+                        <p>输入框、开关和提示词区域可用于查看样式状态，但不会读取或写入配置</p>
                     </div>
                 </div>
                 <div class="flex items-start">
@@ -255,8 +267,8 @@
                         <span class="text-indigo-600 font-bold">3</span>
                     </div>
                     <div>
-                        <p class="font-semibold text-gray-700 mb-1">测试并保存</p>
-                        <p>点击"测试连接"确认配置正确，然后点击"保存设置"</p>
+                        <p class="font-semibold text-gray-700 mb-1">功能停用</p>
+                        <p>测试连接和保存设置按钮仅保留视觉反馈，不再发起实际请求</p>
                     </div>
                 </div>
             </div>
@@ -293,46 +305,31 @@
     </div>
 
     <script>
-        // 默认提示词
-        const DEFAULT_PROMPT = `# Role
-你是一位精通多领域知识建模的"深度内容架构师"。你的任务是将视频转录文本（ASR）加工成一份逻辑严密、细节丰满、且具备极高可读性的 Markdown 深度笔记。
+        let promptPresets = [];
 
-# Core Objective
-**信息无损还原**：让从未看过原视频的读者，通过阅读本文档，能完全掌握视频中的核心逻辑、具体方法论、生动案例以及所有的关键细节，严禁过度简化。
-
-# Task Goals
-1. **拒绝干条目**：不仅记录结论，更要保留得出结论的推导过程、背景原因、以及博主使用的类比和例子。
-2. **场景与细节复刻**：保留视频中提及的具体参数（如数值、设置）、具体话术（如交友/职场沟通）、以及具体的合规/避坑细节。
-3. **结构化重组**：打破零散的口语顺序，按照最符合认知逻辑的结构重新组织内容。
-
-# Processing Logic (Adaptive)
-请根据输入内容的本质属性，自动匹配最佳逻辑框架：
-
-1. **【决策/合规/策略类】（侧重逻辑与方案）**：
-   - 框架：背景趋势 -> 核心痛点/风险分析 -> 深度解决方案（分点详述） -> 实施建议/风险规避。
-2. **【理论/体系/心理类】（侧重概念与理解）**：
-   - 框架：核心概念界定 -> 底层原理/逻辑拆解（保留生动类比） -> 现实应用场景 -> 认知升级/延伸思考。
-3. **【技能/实操/方法类】（侧重动作与流程）**：
-   - 框架：目标设定 -> 详细分步拆解（含操作要点） -> 关键细节/常见错误 -> 进阶技巧/复盘建议。
-4. **【观点/启发/思维类】（侧重洞察与改变）**：
-   - 框架：现状观察/痛点挖掘 -> 核心思维转折点 -> 行动指南/具体建议 -> 价值升华/金句提炼。
-
-# Content Requirements (Rich & Descriptive)
-- **多级标题**：严禁结构扁平。必须根据内容复杂度灵活使用 \`##\`, \`###\`, 甚至 \`####\` 来构建知识索引。
-- **案例扩充**：若视频中提到案例、实验或故事，请详细描述其过程、转折和结论，使其具备"故事性"和"说服力"。
-- **解释性写作**：保留博主对专业术语的通俗化解释，确保文档对"门外汉"友好。
-- **模块化总结**：在每一个二级标题（##）的末尾，添加一个引用块：
-  > **💡 核心萃取：** [用一句话提炼本章节的底层逻辑或核心价值，必须具备启发性]
-
-# Tone & Style
-- 风格：客观、详尽、富有条理。
-- 目标：将"碎片化的口语"转化为"系统化的书面知识体系"。`;
-
-        // 使用默认提示词
-        function useDefaultPrompt() {
-            document.getElementById('systemPrompt').value = DEFAULT_PROMPT;
-            showStatus('已恢复为默认提示词', 'success');
+        async function loadPromptPresets() {
+            try {
+                const response = await fetch('/api/models/prompt_presets');
+                const result = await response.json();
+                if (result.success && Array.isArray(result.presets)) {
+                    promptPresets = result.presets;
+                }
+            } catch (error) {
+                console.error('加载默认提示词模板失败:', error);
+            }
         }
+
+        function usePromptPreset(presetId) {
+            const preset = promptPresets.find(item => item.id === presetId);
+            if (!preset) {
+                showStatus('默认模板加载失败，请刷新页面后再试', 'error');
+                return;
+            }
+            document.getElementById('systemPrompt').value = preset.prompt;
+            showStatus(`已填入「${preset.name}」`, 'success');
+        }
+
+        window.addEventListener('DOMContentLoaded', loadPromptPresets);
 
         // 切换Temperature设置
         function toggleTemperature() {
@@ -358,39 +355,7 @@
             }
         }
 
-        // 页面加载时获取当前设置
-        window.addEventListener('DOMContentLoaded', async () => {
-            try {
-                const response = await fetch('/api/get_config');
-                if (response.ok) {
-                    const config = await response.json();
-                    
-                    if (config.api_key) document.getElementById('apiKey').value = config.api_key;
-                    if (config.base_url) document.getElementById('baseUrl').value = config.base_url;
-                    if (config.model_provider) document.getElementById('modelProvider').value = config.model_provider;
-                    if (config.model_name) document.getElementById('modelName').value = config.model_name;
-                    
-                    // Temperature设置
-                    if (config.temperature !== undefined && config.temperature !== null) {
-                        document.getElementById('enableTemperature').checked = true;
-                        document.getElementById('temperatureControl').classList.remove('hidden');
-                        document.getElementById('temperature').value = config.temperature;
-                        document.getElementById('temperatureValue').textContent = config.temperature;
-                    }
-                    
-                    // Max Tokens设置
-                    if (config.max_tokens) {
-                        document.getElementById('enableMaxTokens').checked = true;
-                        document.getElementById('maxTokensControl').classList.remove('hidden');
-                        document.getElementById('maxTokens').value = config.max_tokens;
-                    }
-                    
-                    if (config.default_system_prompt) document.getElementById('systemPrompt').value = config.default_system_prompt;
-                }
-            } catch (error) {
-                console.error('加载配置失败:', error);
-            }
-        });
+        // 该页面仅保留样式预览，不再读取或写入实际 API 配置。
 
         // 显示状态消息
         function showStatus(message, type = 'info') {
@@ -417,46 +382,23 @@
             }, 3000);
         }
 
-        // 测试连接
-        async function testConnection() {
+        // 测试连接按钮仅保留交互样式，不再发起实际请求。
+        function testConnection() {
             const testBtn = document.getElementById('testBtn');
             const originalText = testBtn.innerHTML;
             
             testBtn.disabled = true;
             testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>测试中...';
-            
-            try {
-                const formData = {
-                    api_key: document.getElementById('apiKey').value,
-                    base_url: document.getElementById('baseUrl').value,
-                    model_name: document.getElementById('modelName').value
-                };
-                
-                const response = await fetch('/api/test_connection', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showStatus('连接测试成功！API 配置正常。', 'success');
-                } else {
-                    showStatus('连接测试失败: ' + result.error, 'error');
-                }
-            } catch (error) {
-                showStatus('连接测试失败: ' + error.message, 'error');
-            } finally {
+
+            setTimeout(() => {
+                showStatus('此页面仅保留样式，测试连接功能已停用。', 'info');
                 testBtn.disabled = false;
                 testBtn.innerHTML = originalText;
-            }
+            }, 300);
         }
 
-        // 保存设置
-        document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+        // 保存按钮仅保留交互样式，不再保存任何实际配置。
+        document.getElementById('settingsForm').addEventListener('submit', (e) => {
             e.preventDefault();
             
             const saveBtn = document.getElementById('saveBtn');
@@ -464,52 +406,12 @@
             
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>保存中...';
-            
-            try {
-                const formData = {
-                    api_key: document.getElementById('apiKey').value,
-                    base_url: document.getElementById('baseUrl').value,
-                    model_provider: document.getElementById('modelProvider').value,
-                    model_name: document.getElementById('modelName').value,
-                    default_system_prompt: document.getElementById('systemPrompt').value
-                };
-                
-                // 只在勾选时才保存temperature
-                if (document.getElementById('enableTemperature').checked) {
-                    formData.temperature = parseFloat(document.getElementById('temperature').value);
-                } else {
-                    formData.temperature = null; // 明确设置为null表示使用默认值
-                }
-                
-                // 只在勾选时才保存max_tokens
-                if (document.getElementById('enableMaxTokens').checked) {
-                    const maxTokensValue = document.getElementById('maxTokens').value;
-                    formData.max_tokens = maxTokensValue ? parseInt(maxTokensValue) : null;
-                } else {
-                    formData.max_tokens = null; // 明确设置为null表示使用默认值
-                }
-                
-                const response = await fetch('/api/save_config', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formData)
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showStatus('设置保存成功！', 'success');
-                } else {
-                    showStatus('保存失败: ' + result.error, 'error');
-                }
-            } catch (error) {
-                showStatus('保存失败: ' + error.message, 'error');
-            } finally {
+
+            setTimeout(() => {
+                showStatus('此页面仅保留样式，保存设置功能已停用。', 'info');
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = originalText;
-            }
+            }, 300);
         });
     </script>
 </body>

@@ -5,8 +5,15 @@ cd "$DIR"
 
 PORT=5001
 
+# 读取版本号
+if [ -f "$DIR/VERSION" ]; then
+    VERSION=$(cat "$DIR/VERSION" | tr -d '[:space:]')
+else
+    VERSION="unknown"
+fi
+
 echo "================================================"
-echo "  视频转文字工具"
+echo "  视频转文字工具  v${VERSION}"
 echo "================================================"
 echo ""
 
@@ -26,6 +33,24 @@ fi
 
 export KMP_DUPLICATE_LIB_OK=TRUE
 source "$DIR/venv311/bin/activate"
+
+# 检查核心依赖是否已安装
+MISSING=""
+for pkg in flask openai dotenv requests; do
+    python3 -c "import $pkg" 2>/dev/null || MISSING="$MISSING $pkg"
+done
+
+if [ -n "$MISSING" ]; then
+    echo "⚠️  检测到缺少依赖:$MISSING"
+    echo "   正在自动安装 requirements.txt ..."
+    pip install -r "$DIR/requirements.txt" --quiet
+    if [ $? -ne 0 ]; then
+        echo "❌ 依赖安装失败，请手动运行: pip install -r requirements.txt"
+        read -n 1 -s -r -p "按任意键退出..."
+        exit 1
+    fi
+    echo "✓ 依赖安装完成"
+fi
 
 echo "✓ 虚拟环境已激活（Python 3.11）"
 echo "✓ 启动服务，地址: http://localhost:$PORT"

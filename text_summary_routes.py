@@ -246,7 +246,7 @@ def _extract_docx(file_path):
 
 
 def _get_ai_client(model_alias):
-    """根据模型别名获取 AI 客户端配置，返回 (client, model_name, custom_prompt, max_tokens, temperature)"""
+    """根据模型别名获取 AI 客户端配置。"""
     models_config = ModelsConfig()
     model_config = models_config.get_model_by_alias(model_alias)
 
@@ -259,6 +259,7 @@ def _get_ai_client(model_alias):
         custom_prompt = model_config.get('custom_prompt', '')
         max_tokens = model_config.get('max_tokens')
         temperature = model_config.get('temperature', 0.7)
+        reasoning_effort = model_config.get('reasoning_effort')
     else:
         client = OpenAI(
             api_key=os.getenv('OPENAI_API_KEY'),
@@ -268,8 +269,9 @@ def _get_ai_client(model_alias):
         custom_prompt = ''
         max_tokens = None
         temperature = 0.7
+        reasoning_effort = None
 
-    return client, model_name, custom_prompt, max_tokens, temperature
+    return client, model_name, custom_prompt, max_tokens, temperature, reasoning_effort
 
 
 def _build_prompt(text, title, custom_prompt=None):
@@ -407,7 +409,7 @@ def summarize():
         user_prompt = data.get('custom_prompt', '')
         merge = data.get('merge', True)
 
-        client, model_name, model_prompt, max_tokens, temperature = _get_ai_client(model_alias)
+        client, model_name, model_prompt, max_tokens, temperature, reasoning_effort = _get_ai_client(model_alias)
         effective_prompt = user_prompt or model_prompt or None
 
         doc_log.start()
@@ -429,11 +431,16 @@ def summarize():
                 'messages': [
                     {"role": "system", "content": "你是一个专业的内容整理助手，擅长将文档内容整理成结构化的笔记。"},
                     {"role": "user", "content": prompt_text}
-                ],
-                'temperature': temperature
+                ]
             }
+            if temperature is not None:
+                request_params['temperature'] = temperature
             if max_tokens:
                 request_params['max_tokens'] = max_tokens
+            if reasoning_effort:
+                request_params['extra_body'] = {
+                    'reasoning_effort': reasoning_effort
+                }
             resp = client.chat.completions.create(**request_params)
             elapsed = time.time() - t0
             text = resp.choices[0].message.content

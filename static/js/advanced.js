@@ -2,7 +2,7 @@ let uploadedFiles = [];
 let combinedTranscript = '';
 let aiSummary = '';
 let folderName = '';
-let customPromptText = ''; // 从 API配置中加载
+let customPromptText = ''; // 从默认模板或已保存模型读取
 let mergeOutput = true; // 输出方式：合并 or 分开
 window.linkDownloadedVideos = window.linkDownloadedVideos || {};
 
@@ -44,41 +44,8 @@ function toggleProcessingMode() {
     }
 }
 
-// 默认提示词（仅用于后端，前端从API配置读取）
-// 注意：不含 {transcript} 占位符，后端会自动追加转录内容
-const DEFAULT_PROMPT = `# Role
-你是一位精通多领域知识建模的"深度内容架构师"。你的任务是将视频转录文本（ASR）加工成一份逻辑严密、细节丰满、且具备极高可读性的 Markdown 深度笔记。
-
-# Core Objective
-**信息无损还原**：让从未看过原视频的读者，通过阅读本文档，能完全掌握视频中的核心逻辑、具体方法论、生动案例以及所有的关键细节，严禁过度简化。
-
-# Task Goals
-1. **拒绝干条目**：不仅记录结论，更要保留得出结论的推导过程、背景原因、以及博主使用的类比和例子。
-2. **场景与细节复刻**：保留视频中提及的具体参数（如数值、设置）、具体话术（如交友/职场沟通）、以及具体的合规/避坑细节。
-3. **结构化重组**：打破零散的口语顺序，按照最符合认知逻辑的结构重新组织内容。
-
-# Processing Logic (Adaptive)
-请根据输入内容的本质属性，自动匹配最佳逻辑框架：
-
-1. **【决策/合规/策略类】（侧重逻辑与方案）**：
-   - 框架：背景趋势 -> 核心痛点/风险分析 -> 深度解决方案（分点详述） -> 实施建议/风险规避。
-2. **【理论/体系/心理类】（侧重概念与理解）**：
-   - 框架：核心概念界定 -> 底层原理/逻辑拆解（保留生动类比） -> 现实应用场景 -> 认知升级/延伸思考。
-3. **【技能/实操/方法类】（侧重动作与流程）**：
-   - 框架：目标设定 -> 详细分步拆解（含操作要点） -> 关键细节/常见错误 -> 进阶技巧/复盘建议。
-4. **【观点/启发/思维类】（侧重洞察与改变）**：
-   - 框架：现状观察/痛点挖掘 -> 核心思维转折点 -> 行动指南/具体建议 -> 价值升华/金句提炼。
-
-# Content Requirements (Rich & Descriptive)
-- **多级标题**：严禁结构扁平。必须根据内容复杂度灵活使用 \`##\`, \`###\`, 甚至 \`####\` 来构建知识索引。
-- **案例扩充**：若视频中提到案例、实验或故事，请详细描述其过程、转折和结论，使其具备"故事性"和"说服力"。
-- **解释性写作**：保留博主对专业术语的通俗化解释，确保文档对"门外汉"友好。
-- **模块化总结**：在每一个二级标题（##）的末尾，添加一个引用块：
-  > **💡 核心萃取：** [用一句话提炼本章节的底层逻辑或核心价值，必须具备启发性]
-
-# Tone & Style
-- 风格：客观、详尽、富有条理。
-- 目标：将"碎片化的口语"转化为"系统化的书面知识体系"。`;
+// 整理重排：后端也会在模型未填提示词时使用同一套默认模板
+let DEFAULT_PROMPT = '';
 
 // 中文数字转阿拉伯数字
 function chineseToNumber(str) {
@@ -148,12 +115,24 @@ function naturalSort(a, b) {
 // 页面加载时从多模型配置加载模型列表
 document.addEventListener('DOMContentLoaded', async function() {
     try {
-        // 加载提示词
+        const presetsResponse = await fetch('/api/models/prompt_presets');
+        if (presetsResponse.ok) {
+            const presetsData = await presetsResponse.json();
+            if (presetsData.success && Array.isArray(presetsData.presets)) {
+                const defaultId = presetsData.default_id || 'restructure';
+                const defaultPreset = presetsData.presets.find(item => item.id === defaultId) || presetsData.presets[0];
+                if (defaultPreset) {
+                    DEFAULT_PROMPT = defaultPreset.prompt;
+                    customPromptText = defaultPreset.prompt;
+                }
+            }
+        }
+
         const configResponse = await fetch('/api/get_config');
         if (configResponse.ok) {
             const config = await configResponse.json();
             customPromptText = config.default_system_prompt || DEFAULT_PROMPT;
-        } else {
+        } else if (!customPromptText) {
             customPromptText = DEFAULT_PROMPT;
         }
         
@@ -171,7 +150,7 @@ document.addEventListener('DOMContentLoaded', async function() {
                     modelsData.models.forEach(model => {
                         const option = document.createElement('option');
                         option.value = model.alias;
-                        option.textContent = `${model.alias} - ${model.model_name}`;
+                        option.textContent = model.display_name || `${model.provider_alias || model.alias}-${model.model_name}`;
                         option.dataset.modelName = model.model_name;
                         
                         // 如果是活动模型，设为选中
@@ -737,9 +716,61 @@ function stopTimer() {
     }
 }
 
+function cleanMarkdownTitle(value) {
+    return (value || '')
+        .replace(/^#{1,6}\s*/, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/<[^>]+>/g, '')
+        .replace(/[\`*_~]/g, '')
+        .replace(/^(?:标题|题目|title)\s*[:：]\s*/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function extractAiTitle(markdown) {
+    const lines = (markdown || '')
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean);
+
+    const explicitTitle = lines.find(line => {
+        return /^(?:#{1,6}\s*)?(?:[\`*_~]+\s*)?(?:标题|题目|title)\s*[:：]\s*\S+/i.test(line);
+    });
+    const levelOneTitle = lines.find(line => /^#\s+\S+/.test(line));
+    const otherHeading = lines.find(line => /^#{2,3}\s+\S+/.test(line));
+
+    return cleanMarkdownTitle(explicitTitle || levelOneTitle || otherHeading || '');
+}
+
+function sanitizeDownloadBaseName(value, fallback = 'AI摘要') {
+    let safeName = (value || fallback)
+        .replace(/[\x00-\x1f\\/:*?"<>|]/g, '_')
+        .replace(/\s+/g, ' ')
+        .replace(/[.\s]+$/g, '')
+        .trim();
+
+    if (!safeName) safeName = fallback;
+    if (/^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/i.test(safeName)) {
+        safeName = `_${safeName}`;
+    }
+    return Array.from(safeName).slice(0, 100).join('');
+}
+
+function getSummaryDownloadFilename(content, fallback = 'AI摘要') {
+    const aiTitle = extractAiTitle(content);
+    return `${sanitizeDownloadBaseName(aiTitle, fallback)}.md`;
+}
+
 function downloadText(type) {
     const content = type === 'transcript' ? combinedTranscript : aiSummary;
-    const filename = type === 'transcript' ? '完整转录.txt' : 'AI摘要.md';
+    const sourceFallback = folderName || (
+        uploadedFiles.length === 1
+            ? uploadedFiles[0].name.replace(/\.[^.]+$/, '')
+            : 'AI摘要'
+    );
+    const filename = type === 'transcript'
+        ? '完整转录.txt'
+        : getSummaryDownloadFilename(content, sourceFallback);
     
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -754,12 +785,12 @@ function downloadSplitSummary(idx, name) {
     const results = window._splitResults;
     if (!results || !results[idx]) return;
     const content = results[idx].ai_summary || '';
-    const safeName = name.replace(/[\\/:*?"<>|]/g, '_').replace(/\.[^.]+$/, '');
+    const sourceFallback = name.replace(/\.[^.]+$/, '');
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `AI摘要_${safeName}.md`;
+    a.download = getSummaryDownloadFilename(content, sourceFallback);
     a.click();
     URL.revokeObjectURL(url);
 }
@@ -817,107 +848,6 @@ function formatFileSize(bytes) {
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 }
 
-function toggleApiSettings() {
-    const modal = document.getElementById('apiModal');
-    modal.classList.toggle('hidden');
-    
-    if (!modal.classList.contains('hidden')) {
-        loadApiSettings();
-    }
-}
-
-async function loadApiSettings() {
-    try {
-        // 获取当前选中的AI模型
-        const currentModel = document.getElementById('aiModel').value;
-        
-        // 从多模型配置中查找该模型
-        const modelsResponse = await fetch('/api/models/list');
-        const modelsData = await modelsResponse.json();
-        
-        if (modelsData.success && modelsData.models) {
-            // 尝试找到匹配的模型配置（通过model_name匹配）
-            const matchedModel = modelsData.models.find(m => m.model_name === currentModel);
-            
-            if (matchedModel) {
-                // 使用找到的模型配置
-                document.getElementById('apiKey').value = matchedModel.api_key || '';
-                document.getElementById('baseUrl').value = matchedModel.base_url || '';
-                // 显示模型名称（model_name字段）
-                document.getElementById('defaultModel').value = matchedModel.model_name || currentModel;
-            } else {
-                // 如果没找到，使用默认API配置
-                const response = await fetch('/api/get_config');
-                const data = await response.json();
-                
-                document.getElementById('apiKey').value = data.api_key || '';
-                document.getElementById('baseUrl').value = data.base_url || '';
-                document.getElementById('defaultModel').value = data.model_name || currentModel;
-            }
-        } else {
-            // 如果多模型配置加载失败，使用默认API配置
-            const response = await fetch('/api/get_config');
-            const data = await response.json();
-            
-            document.getElementById('apiKey').value = data.api_key || '';
-            document.getElementById('baseUrl').value = data.base_url || '';
-            document.getElementById('defaultModel').value = data.model_name || currentModel;
-        }
-    } catch (error) {
-        console.error('加载设置失败:', error);
-    }
-}
-
-async function saveApiSettings() {
-    const apiKey = document.getElementById('apiKey').value;
-    const baseUrl = document.getElementById('baseUrl').value;
-    const defaultModel = document.getElementById('defaultModel').value;
-    
-    try {
-        const response = await fetch('/api/save_config', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                api_key: apiKey || undefined,
-                base_url: baseUrl,
-                model_name: defaultModel
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            alert('设置已保存');
-            toggleApiSettings();
-            
-            // 更新主页面的AI模型选择
-            if (defaultModel) {
-                const aiModelSelect = document.getElementById('aiModel');
-                if (aiModelSelect) {
-                    // 检查模型是否在下拉列表中
-                    const modelExists = Array.from(aiModelSelect.options).some(option => option.value === defaultModel);
-                    
-                    if (modelExists) {
-                        aiModelSelect.value = defaultModel;
-                    } else {
-                        // 如果模型不在列表中，添加一个新选项
-                        const newOption = document.createElement('option');
-                        newOption.value = defaultModel;
-                        newOption.textContent = defaultModel;
-                        newOption.selected = true;
-                        aiModelSelect.appendChild(newOption);
-                    }
-                }
-            }
-        } else {
-            alert('保存失败: ' + (data.error || '未知错误'));
-        }
-    } catch (error) {
-        alert('保存失败: ' + error.message);
-    }
-}
 
 document.getElementById('enableAI').addEventListener('change', (e) => {
     const aiSettings = document.getElementById('aiSettings');
@@ -957,40 +887,65 @@ function showTestResult(message, isSuccess) {
     resultDiv.classList.remove('hidden');
 }
 
-// 连通性测试函数
+// 连通性测试函数 —— 测试当前 AI模型 下拉列表中选中的模型
 async function testApiConnection() {
     const testBtn = document.getElementById('testConnectionBtn');
     const originalHTML = testBtn.innerHTML;
-    
+
     // 隐藏之前的测试结果
     hideTestResult();
-    
+
     // 显示加载状态
     testBtn.disabled = true;
     testBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>测试中...';
-    
+
     try {
-        const response = await fetch('/api/test_connection');
-        
+        // 获取当前选中的模型 alias
+        const selectedAlias = document.getElementById('aiModel').value;
+        if (!selectedAlias) {
+            showTestResult('✗ 请先选择一个 AI 模型', false);
+            return;
+        }
+
+        // 从多模型列表中查找该模型的完整配置
+        const listResp = await fetch('/api/models/list');
+        const listData = await listResp.json();
+        const model = (listData.models || []).find(m => m.alias === selectedAlias);
+
+        if (!model) {
+            showTestResult(`✗ 未找到模型「${selectedAlias}」的配置信息`, false);
+            return;
+        }
+
+        // 调用多模型测试接口
+        const response = await fetch('/api/models/test_connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                api_key: model.api_key,
+                base_url: model.base_url,
+                model_name: model.model_name
+            })
+        });
+
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.success) {
             showTestResult(
-                `✓ 连接测试成功！Base URL: ${data.base_url} | 模型: ${data.model}`,
+                `✓ 连接成功！模型: ${model.model_name}`,
                 true
             );
         } else {
-            showTestResult(`✗ 连接测试失败：${data.error}`, false);
+            showTestResult(`✗ ${data.error}`, false);
         }
     } catch (error) {
         console.error('连接测试错误:', error);
         showTestResult(`✗ 连接测试失败：${error.message}`, false);
     } finally {
-        // 恢复按钮状态
         testBtn.disabled = false;
         testBtn.innerHTML = originalHTML;
     }
@@ -1081,7 +1036,7 @@ async function loadDocModelList() {
         data.models.forEach(m => {
             const opt = document.createElement('option');
             opt.value = m.alias;
-            opt.textContent = `${m.alias} (${m.model_name})`;
+            opt.textContent = m.display_name || `${m.provider_alias || m.alias}-${m.model_name}`;
             sel.appendChild(opt);
         });
     } catch(e) { console.error('加载模型列表失败:', e); }
@@ -1445,25 +1400,537 @@ function downloadDocSplitSummary(idx) {
     URL.revokeObjectURL(url);
 }
 
+// ==================== 图片识别总结功能 ====================
+let imageFiles = [];
+let imageExtracted = [];
+let imageMergeMode = true;
+let imageSummaryText = '';
+let imageOcrText = '';
+let imageSplitSummaries = [];
+let imageProcessing = false;
+let imageEventSource = null;
+let imageSortable = null;
+const IMAGE_ALLOWED_EXTS = ['png', 'jpg', 'jpeg', 'bmp', 'webp', 'tif', 'tiff'];
+const IMAGE_ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/bmp', 'image/webp', 'image/tiff'];
+const IMAGE_MAX_FILES = 30;
+const IMAGE_MAX_SIZE = 15 * 1024 * 1024;
+const IMAGE_MAX_TOTAL_SIZE = 150 * 1024 * 1024;
+
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[ch]));
+}
+
+function renderSafeMarkdown(markdownText) {
+    if (!markdownText) return '';
+    const html = marked.parse(markdownText);
+    if (window.DOMPurify) {
+        return DOMPurify.sanitize(html);
+    }
+    return `<pre class="whitespace-pre-wrap font-sans">${escapeHtml(markdownText)}</pre>`;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const imageDrop = document.getElementById('imageDropZone');
+    const imageInput = document.getElementById('imageFileInput');
+    if (!imageDrop || !imageInput) return;
+
+    imageDrop.addEventListener('click', () => imageInput.click());
+    imageInput.addEventListener('change', (e) => handleImageFiles(Array.from(e.target.files)));
+
+    imageDrop.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        imageDrop.classList.add('border-indigo-500', 'bg-indigo-50');
+    });
+    imageDrop.addEventListener('dragleave', () => {
+        imageDrop.classList.remove('border-indigo-500', 'bg-indigo-50');
+    });
+    imageDrop.addEventListener('drop', (e) => {
+        e.preventDefault();
+        imageDrop.classList.remove('border-indigo-500', 'bg-indigo-50');
+        handleImageFiles(Array.from(e.dataTransfer.files));
+    });
+
+    loadImageModelList();
+});
+
+async function loadImageModelList() {
+    try {
+        const resp = await fetch('/api/models/list');
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const sel = document.getElementById('imageAiModel');
+        if (!sel || !data.models) return;
+        data.models.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.alias;
+            opt.textContent = m.display_name || `${m.provider_alias || m.alias}-${m.model_name}`;
+            if (m.alias === data.active_model) opt.selected = true;
+            sel.appendChild(opt);
+        });
+    } catch(e) { console.error('加载图片总结模型列表失败:', e); }
+}
+
+function handleImageFiles(files) {
+    const rejected = [];
+    let totalSize = imageFiles.reduce((sum, file) => sum + file.size, 0);
+
+    files.forEach(f => {
+        const ext = f.name.split('.').pop().toLowerCase();
+        const hasAllowedType = !f.type || IMAGE_ALLOWED_TYPES.includes(f.type);
+        if (!IMAGE_ALLOWED_EXTS.includes(ext) || !hasAllowedType) {
+            rejected.push(`${f.name}：不支持的格式`);
+            return;
+        }
+        if (f.size > IMAGE_MAX_SIZE) {
+            rejected.push(`${f.name}：单张超过 ${formatFileSize(IMAGE_MAX_SIZE)}`);
+            return;
+        }
+        if (imageFiles.length >= IMAGE_MAX_FILES) {
+            rejected.push(`${f.name}：一次最多上传 ${IMAGE_MAX_FILES} 张`);
+            return;
+        }
+        if (totalSize + f.size > IMAGE_MAX_TOTAL_SIZE) {
+            rejected.push(`${f.name}：图片总大小超过 ${formatFileSize(IMAGE_MAX_TOTAL_SIZE)}`);
+            return;
+        }
+
+        imageFiles.push(f);
+        totalSize += f.size;
+    });
+    if (rejected.length > 0) {
+        alert('以下图片未加入队列：\n' + rejected.join('\n'));
+    }
+    updateImageFileList();
+    updateImageStats();
+    document.getElementById('imageSummaryBtn').disabled = imageFiles.length === 0;
+    const input = document.getElementById('imageFileInput');
+    if (input) input.value = '';
+}
+
+function getImageIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    if (['jpg', 'jpeg'].includes(ext)) return '<i class="fas fa-file-image text-blue-500"></i>';
+    if (ext === 'png') return '<i class="fas fa-file-image text-green-500"></i>';
+    if (ext === 'webp') return '<i class="fas fa-file-image text-purple-500"></i>';
+    return '<i class="fas fa-image text-gray-500"></i>';
+}
+
+function updateImageFileList() {
+    const list = document.getElementById('imageFileList');
+    const count = document.getElementById('imageFileCount');
+    count.textContent = `(${imageFiles.length} 个文件)`;
+
+    if (imageFiles.length === 0) {
+        list.innerHTML = '<div class="text-center py-8 text-gray-400"><i class="fas fa-inbox text-4xl mb-2"></i><p class="text-sm">暂无图片，请上传文件</p></div>';
+        return;
+    }
+
+    list.innerHTML = imageFiles.map((file, idx) => {
+        const ex = imageExtracted.find(d => d.fileIndex === idx);
+        const status = ex ? ex.status : 'pending';
+        let statusIcon = '<i class="fas fa-clock text-gray-400"></i>';
+        let bg = 'bg-gray-50';
+        if (status === 'extracted') { statusIcon = '<i class="fas fa-check-circle text-green-500"></i>'; bg = 'bg-green-50 border border-green-200'; }
+        else if (status === 'failed') { statusIcon = '<i class="fas fa-exclamation-circle text-red-500"></i>'; bg = 'bg-red-50 border border-red-200'; }
+
+        const safeName = escapeHtml(file.name);
+        const safeError = ex && ex.error ? escapeHtml(ex.error) : '';
+        const imageSizeInfo = ex && ex.width && ex.height ? `<span class="text-xs text-gray-500 ml-2">${ex.width}x${ex.height}</span>` : '';
+        const errorHtml = (status === 'failed' && safeError) ? `<p class="text-xs text-red-500 mt-1 truncate" title="${safeError}">${safeError}</p>` : '';
+        const charInfo = (ex && ex.charCount) ? `<span class="text-xs text-green-600 ml-2">${ex.charCount} 字符</span>` : '';
+        const lineInfo = (ex && ex.lineCount) ? `<span class="text-xs text-blue-600 ml-2">${ex.lineCount} 行</span>` : '';
+        const removeBtn = !imageProcessing ? `<button onclick="removeImageFile(${idx})" class="ml-2 text-red-500 hover:text-red-700" title="删除"><i class="fas fa-times"></i></button>` : '';
+
+        return `<div class="flex items-center justify-between p-3 ${bg} rounded-lg transition-colors">
+            <div class="flex items-center flex-1 min-w-0">
+                <span class="mr-3 text-lg flex-shrink-0">${statusIcon}</span>
+                <i class="fas fa-grip-vertical drag-handle text-gray-400 mr-3 flex-shrink-0 ${imageProcessing ? 'opacity-30' : ''}"></i>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium text-gray-800 truncate">${getImageIcon(file.name)} ${safeName} ${charInfo}${lineInfo}${imageSizeInfo}</p>
+                    <p class="text-xs text-gray-500">${formatFileSize(file.size)}</p>
+                    ${errorHtml}
+                </div>
+            </div>
+            <div class="flex items-center flex-shrink-0">${removeBtn}</div>
+        </div>`;
+    }).join('');
+
+    initImageSortable();
+}
+
+function initImageSortable() {
+    const list = document.getElementById('imageFileList');
+    if (imageSortable) {
+        imageSortable.destroy();
+        imageSortable = null;
+    }
+    if (!list || imageProcessing || imageFiles.length < 2 || typeof Sortable === 'undefined') return;
+    imageSortable = new Sortable(list, {
+        animation: 150,
+        handle: '.drag-handle',
+        ghostClass: 'sortable-ghost',
+        onEnd: function(evt) {
+            const item = imageFiles.splice(evt.oldIndex, 1)[0];
+            imageFiles.splice(evt.newIndex, 0, item);
+            imageExtracted = [];
+            imageSummaryText = '';
+            imageOcrText = '';
+            imageSplitSummaries = [];
+            document.getElementById('imageTextSection').classList.add('hidden');
+            document.getElementById('imageResultSection').classList.add('hidden');
+            updateImageFileList();
+            updateImageStats();
+        }
+    });
+}
+
+function removeImageFile(idx) {
+    const exIdx = imageExtracted.findIndex(d => d.fileIndex === idx);
+    if (exIdx !== -1) imageExtracted.splice(exIdx, 1);
+    imageFiles.splice(idx, 1);
+    imageExtracted.forEach(d => { if (d.fileIndex > idx) d.fileIndex--; });
+    updateImageFileList();
+    updateImageStats();
+    document.getElementById('imageSummaryBtn').disabled = imageFiles.length === 0;
+}
+
+function clearAllImages() {
+    if (imageFiles.length === 0) return;
+    if (!confirm('确定要清空所有图片吗？')) return;
+    imageFiles = [];
+    imageExtracted = [];
+    imageSummaryText = '';
+    imageOcrText = '';
+    imageSplitSummaries = [];
+    updateImageFileList();
+    updateImageStats();
+    document.getElementById('imageSummaryBtn').disabled = true;
+    document.getElementById('imageTextSection').classList.add('hidden');
+    document.getElementById('imageResultSection').classList.add('hidden');
+}
+
+function setImageOutputMode(mode) {
+    imageMergeMode = (mode === 'merge');
+    const mb = document.getElementById('imageMergeBtn');
+    const sb = document.getElementById('imageSplitBtn');
+    if (imageMergeMode) {
+        mb.className = 'flex-1 py-2 font-medium bg-indigo-600 text-white transition-colors text-sm';
+        sb.className = 'flex-1 py-2 font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm';
+    } else {
+        mb.className = 'flex-1 py-2 font-medium bg-white text-gray-700 hover:bg-gray-50 transition-colors text-sm';
+        sb.className = 'flex-1 py-2 font-medium bg-indigo-600 text-white transition-colors text-sm';
+    }
+}
+
+function updateImageStats() {
+    const total = imageFiles.length;
+    const extracted = imageExtracted.filter(d => d.status === 'extracted').length;
+    const failed = imageExtracted.filter(d => d.status === 'failed').length;
+    const chars = imageExtracted.filter(d => d.status === 'extracted').reduce((s, d) => s + (d.charCount || 0), 0);
+
+    document.getElementById('imageStatTotal').textContent = total;
+    document.getElementById('imageStatExtracted').textContent = extracted;
+    document.getElementById('imageStatChars').textContent = chars.toLocaleString();
+    document.getElementById('imageStatFailed').textContent = failed;
+
+    const bar = document.getElementById('imageProgressBar');
+    const txt = document.getElementById('imageProgressText');
+    if (bar && total > 0) {
+        const pct = Math.round(((extracted + failed) / total) * 100);
+        bar.style.width = pct + '%';
+        bar.className = 'h-full rounded-full transition-all duration-300 ' +
+            (failed > 0 && extracted === 0 ? 'bg-red-500' : failed > 0 ? 'bg-yellow-500' : 'bg-green-500');
+        if (txt) txt.textContent = `${extracted + failed} / ${total}` + (failed > 0 ? ` (${failed} 失败)` : '');
+    } else if (bar) {
+        bar.style.width = '0%';
+        if (txt) txt.textContent = '';
+    }
+}
+
+function connectImageLogStream() {
+    if (imageEventSource) imageEventSource.close();
+    document.getElementById('imageLogSection').classList.remove('hidden');
+
+    imageEventSource = new EventSource('/api/image_summary/stream_logs');
+    imageEventSource.onmessage = function(event) {
+        const log = JSON.parse(event.data);
+        addImageLog(log.message, log.type);
+    };
+    imageEventSource.onerror = function() {
+        if (imageEventSource) { imageEventSource.close(); imageEventSource = null; }
+    };
+}
+
+function disconnectImageLogStream() {
+    if (imageEventSource) { imageEventSource.close(); imageEventSource = null; }
+}
+
+function addImageLog(message, type = 'info') {
+    const container = document.getElementById('imageLogContainer');
+    const line = document.createElement('div');
+    line.className = 'py-0.5';
+    const colors = {
+        'header': 'text-yellow-400 font-bold',
+        'success': 'text-green-400',
+        'error': 'text-red-400',
+        'warning': 'text-yellow-300',
+        'info': 'text-gray-300'
+    };
+    const span = document.createElement('span');
+    span.className = colors[type] || colors.info;
+    span.textContent = message;
+    line.appendChild(span);
+    container.appendChild(line);
+    container.scrollTop = container.scrollHeight;
+}
+
+function clearImageLog() {
+    document.getElementById('imageLogContainer').innerHTML = '';
+}
+
+function renderImageOcrText() {
+    const successImages = imageExtracted.filter(d => d.status === 'extracted');
+    imageOcrText = successImages.map((item, idx) => `## [${idx + 1}] ${item.name}\n\n${item.text}`).join('\n\n');
+    document.getElementById('imageTextContent').textContent = imageOcrText;
+    document.getElementById('imageTextSection').classList.toggle('hidden', !imageOcrText);
+}
+
+async function startImageSummary() {
+    if (imageFiles.length === 0) return;
+
+    imageProcessing = true;
+    const btn = document.getElementById('imageSummaryBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>识别图片中...';
+
+    clearImageLog();
+    document.getElementById('imageLogSection').classList.remove('hidden');
+    document.getElementById('imageTextSection').classList.add('hidden');
+    document.getElementById('imageResultSection').classList.add('hidden');
+    addImageLog('📤 开始上传图片并识别文字...', 'info');
+
+    const formData = new FormData();
+    imageFiles.forEach(f => formData.append('files', f));
+
+    try {
+        const uploadResp = await fetch('/api/image_summary/upload', {
+            method: 'POST',
+            body: formData
+        });
+        const uploadData = await uploadResp.json();
+        if (!uploadData.success) {
+            addImageLog('❌ 上传识别失败: ' + (uploadData.error || ''), 'error');
+            alert('上传识别失败: ' + (uploadData.error || '未知错误'));
+            resetImageBtn();
+            return;
+        }
+
+        imageExtracted = [];
+        uploadData.files.forEach((f, i) => {
+            imageExtracted.push({
+                fileIndex: i,
+                name: f.name,
+                text: f.text || '',
+                charCount: f.char_count || 0,
+                lineCount: f.line_count || 0,
+                width: f.width || 0,
+                height: f.height || 0,
+                status: f.success ? 'extracted' : 'failed',
+                error: f.error || null
+            });
+            if (f.success) {
+                addImageLog(`✓ ${f.name} — ${f.char_count} 字符 / ${f.line_count || 0} 行`, 'success');
+            } else {
+                addImageLog(`❌ ${f.name} — ${f.error || '识别失败'}`, 'error');
+            }
+        });
+        addImageLog(`📊 图片识别完成：成功 ${uploadData.succeeded} / 失败 ${uploadData.failed}`, 'info');
+        updateImageFileList();
+        updateImageStats();
+        renderImageOcrText();
+
+        const successImages = imageExtracted.filter(d => d.status === 'extracted');
+        if (successImages.length === 0) {
+            addImageLog('❌ 所有图片识别失败，无法继续总结', 'error');
+            alert('所有图片识别失败，无法继续总结');
+            resetImageBtn();
+            return;
+        }
+
+        btn.innerHTML = '<i class="fas fa-brain fa-spin mr-2"></i>AI 整理中...';
+        connectImageLogStream();
+
+        const modelAlias = document.getElementById('imageAiModel').value;
+        const sumResp = await fetch('/api/image_summary/summarize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                images: successImages.map(d => ({ name: d.name, text: d.text })),
+                model_alias: modelAlias,
+                merge: imageMergeMode
+            })
+        });
+        const sumData = await sumResp.json();
+        disconnectImageLogStream();
+
+        if (!sumData.success) {
+            addImageLog('❌ AI 处理失败: ' + (sumData.error || ''), 'error');
+            alert('AI 处理失败: ' + (sumData.error || '未知错误'));
+            resetImageBtn();
+            return;
+        }
+
+        const resultSection = document.getElementById('imageResultSection');
+        const mergedDiv = document.getElementById('imageMergedResult');
+        const splitDiv = document.getElementById('imageSplitResults');
+
+        resultSection.classList.remove('hidden');
+
+        if (sumData.mode === 'merge') {
+            imageSummaryText = sumData.summary;
+            document.getElementById('imageMergedContent').innerHTML = renderSafeMarkdown(imageSummaryText);
+            mergedDiv.classList.remove('hidden');
+            splitDiv.classList.add('hidden');
+        } else {
+            imageSplitSummaries = sumData.results;
+            imageSummaryText = '';
+            mergedDiv.classList.add('hidden');
+            splitDiv.innerHTML = sumData.results.map((item, idx) => `
+                <div class="bg-white rounded-2xl shadow-xl p-6">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-base font-semibold text-gray-800">
+                            <i class="fas fa-image mr-2 text-indigo-500"></i>
+                            <span class="text-indigo-600 mr-2">[${idx+1}]</span>${escapeHtml(item.name)}
+                        </h3>
+                        <div class="flex space-x-2">
+                            <button onclick="copyImageSplitSummary(${idx}, event)" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                <i class="fas fa-copy mr-1"></i>复制
+                            </button>
+                            <button onclick="downloadImageSplitSummary(${idx})" class="text-indigo-600 hover:text-indigo-800 text-sm font-medium">
+                                <i class="fas fa-download mr-1"></i>下载
+                            </button>
+                        </div>
+                    </div>
+                    <div class="prose max-w-none bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto text-sm">
+                        ${item.success ? renderSafeMarkdown(item.summary) : '<p class="text-red-500">处理失败: ' + escapeHtml(item.error || '') + '</p>'}
+                    </div>
+                </div>
+            `).join('');
+            splitDiv.classList.remove('hidden');
+        }
+
+        const bar = document.getElementById('imageProgressBar');
+        bar.style.width = '100%';
+        bar.className = 'h-full rounded-full transition-all duration-300 bg-green-500';
+        document.getElementById('imageProgressText').textContent = '完成';
+    } catch (error) {
+        disconnectImageLogStream();
+        console.error('图片识别总结失败:', error);
+        addImageLog('❌ 处理失败: ' + error.message, 'error');
+        alert('处理失败: ' + error.message);
+    }
+
+    resetImageBtn();
+}
+
+function resetImageBtn() {
+    imageProcessing = false;
+    const btn = document.getElementById('imageSummaryBtn');
+    btn.disabled = imageFiles.length === 0;
+    btn.innerHTML = '<i class="fas fa-wand-magic-sparkles mr-2"></i>开始识别总结';
+    updateImageFileList();
+}
+
+async function copyImageOcrText(event) {
+    if (!imageOcrText) return;
+    await copyButtonText(imageOcrText, event);
+}
+
+function downloadImageOcrText() {
+    if (!imageOcrText) return;
+    const blob = new Blob([imageOcrText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '图片OCR文字.txt';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+async function copyImageSummary(event) {
+    if (!imageSummaryText) return;
+    await copyButtonText(imageSummaryText, event);
+}
+
+function downloadImageSummary() {
+    if (!imageSummaryText) return;
+    const blob = new Blob([imageSummaryText], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'AI图片总结.md';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+async function copyImageSplitSummary(idx, event) {
+    if (!imageSplitSummaries[idx] || !imageSplitSummaries[idx].summary) return;
+    await copyButtonText(imageSplitSummaries[idx].summary, event);
+}
+
+function downloadImageSplitSummary(idx) {
+    if (!imageSplitSummaries[idx] || !imageSplitSummaries[idx].summary) return;
+    const item = imageSplitSummaries[idx];
+    const safeName = item.name.replace(/[\\/:*?"<>|]/g, '_').replace(/\.[^.]+$/, '');
+    const blob = new Blob([item.summary], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `AI图片总结_${safeName}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+async function copyButtonText(content, event) {
+    try {
+        await navigator.clipboard.writeText(content);
+        const button = event.target.closest('button');
+        const orig = button.innerHTML;
+        button.innerHTML = '<i class="fas fa-check mr-1"></i>已复制';
+        button.classList.add('text-green-600');
+        setTimeout(() => { button.innerHTML = orig; button.classList.remove('text-green-600'); }, 2000);
+    } catch(e) {
+        alert('复制失败');
+    }
+}
+
 // ==================== TAB 切换功能 ====================
 function switchTab(tabName) {
     const videoTab = document.getElementById('videoTab');
     const audioTab = document.getElementById('audioTab');
     const linkTab = document.getElementById('linkTab');
+    const imageSummaryTab = document.getElementById('imageSummaryTab');
     const textSummaryTab = document.getElementById('textSummaryTab');
     const videoContent = document.getElementById('videoTabContent');
     const audioContent = document.getElementById('audioTabContent');
     const linkContent = document.getElementById('linkTabContent');
+    const imageSummaryContent = document.getElementById('imageSummaryTabContent');
     const textSummaryContent = document.getElementById('textSummaryTabContent');
 
     // 重置所有TAB样式
-    [videoTab, audioTab, linkTab, textSummaryTab].forEach(tab => {
+    [videoTab, audioTab, linkTab, imageSummaryTab, textSummaryTab].forEach(tab => {
         tab.classList.remove('border-indigo-600', 'text-indigo-600');
         tab.classList.add('border-transparent', 'text-gray-600');
     });
 
     // 隐藏所有内容
-    [videoContent, audioContent, linkContent, textSummaryContent].forEach(content => {
+    [videoContent, audioContent, linkContent, imageSummaryContent, textSummaryContent].forEach(content => {
         content.classList.add('hidden');
     });
 
@@ -1480,6 +1947,10 @@ function switchTab(tabName) {
         linkTab.classList.add('border-indigo-600', 'text-indigo-600');
         linkTab.classList.remove('border-transparent', 'text-gray-600');
         linkContent.classList.remove('hidden');
+    } else if (tabName === 'imageSummary') {
+        imageSummaryTab.classList.add('border-indigo-600', 'text-indigo-600');
+        imageSummaryTab.classList.remove('border-transparent', 'text-gray-600');
+        imageSummaryContent.classList.remove('hidden');
     } else if (tabName === 'textSummary') {
         textSummaryTab.classList.add('border-indigo-600', 'text-indigo-600');
         textSummaryTab.classList.remove('border-transparent', 'text-gray-600');

@@ -21,7 +21,9 @@ from models_routes import models_bp
 from audio_routes import audio_bp
 from ocr_routes import ocr_bp
 from text_summary_routes import text_summary_bp
+from image_summary_routes import image_summary_bp
 from models_config import ModelsConfig
+from prompt_presets import get_default_prompt
 from log_stream import log_stream
 
 # 尝试导入视频链接解析路由
@@ -40,6 +42,7 @@ app.register_blueprint(models_bp)
 app.register_blueprint(audio_bp)
 app.register_blueprint(ocr_bp)
 app.register_blueprint(text_summary_bp)
+app.register_blueprint(image_summary_bp)
 if HAS_VIDEO_LINK:
     app.register_blueprint(video_link_bp)
 app.config['MAX_CONTENT_LENGTH'] = 5000 * 1024 * 1024  # 5GB
@@ -486,6 +489,7 @@ def process_batch():
                     model_custom_prompt = custom_prompt
                     ai_max_tokens = None
                     ai_temperature = 0.7
+                    ai_reasoning_effort = None
                 else:
                     print(f"   模型别名: {model_alias} / {model_config['model_name']}")
                     client = OpenAI(
@@ -496,6 +500,7 @@ def process_batch():
                     model_custom_prompt = model_config.get('custom_prompt') or custom_prompt
                     ai_max_tokens = model_config.get('max_tokens')
                     ai_temperature = model_config.get('temperature', 0.7)
+                    ai_reasoning_effort = model_config.get('reasoning_effort')
 
                 print(f"   使用{'自定义' if model_custom_prompt else '默认'}提示词")
                 print(f"   输出方式: {'合并' if merge_output else '分开'}")
@@ -506,24 +511,9 @@ def process_batch():
                     if model_custom_prompt:
                         tpl = model_custom_prompt
                     else:
-                        tpl = f"""# 标题：{t}
-
-# Processing Logic (Adaptive)
-请根据输入视频的内容类型，自动选择最适合的组织逻辑进行重组：
-
-1. **若为【实操/教学类】（如摄影、软件操作）**：
-   按"准备工作 -> 核心操作步骤 -> 关键细节/避坑指南 -> 效果复盘"逻辑整理。
-2. **若为【理论/知识类】（如AI原理、科学普及）**：
-   按"核心概念定义 -> 运行机制/原理分析 -> 实际应用场景 -> 未来展望/局限性"逻辑整理。
-3. **若为【人文/社会类】（如心理学、社会现象）**：
-   按"现象观察 -> 核心观点/理论解释 -> 案例论证 -> 对个人或社会的启示"逻辑整理。
-
-# Content Requirements (Strict)
-- **不流于表面**：保留视频中所有的核心论点、实验数据、具体的摄影参数或代码逻辑，确保文档深度。
-- **灵活标题**：严禁全篇只有一级标题。根据内容的复杂度，自主划分为"## 模块"和"### 细分点"。
-- **提炼话术**：在每一个【二级标题】模块的末尾，必须包含一个加粗的总结块：
-  > **💡 本段要义：** [用一句话提炼该章节的核心价值或金句]
-"""
+                        tpl = get_default_prompt()
+                        if t:
+                            tpl = f"# 标题：{t}\n\n{tpl}"
                     # 混合模式且确实有双路内容时才加前缀；单路降级后直接走普通整理
                     is_dual_source = (
                         processing_mode == 'hybrid' and
@@ -555,11 +545,16 @@ def process_batch():
                         'messages': [
                             {"role": "system", "content": "你是一个专业的内容整理助手，擅长将视频转录文本整理成结构化的文档。"},
                             {"role": "user", "content": prompt_text}
-                        ],
-                        'temperature': ai_temperature
+                        ]
                     }
+                    if ai_temperature is not None:
+                        req_params['temperature'] = ai_temperature
                     if ai_max_tokens:
                         req_params['max_tokens'] = ai_max_tokens
+                    if ai_reasoning_effort:
+                        req_params['extra_body'] = {
+                            'reasoning_effort': ai_reasoning_effort
+                        }
                     resp = client.chat.completions.create(**req_params)
                     elapsed = time.time() - t0
                     text = resp.choices[0].message.content
@@ -697,9 +692,6 @@ def download_result():
 
 
 if __name__ == '__main__':
-    import webbrowser
-    import threading
-    
     # 读取版本号
     version = "1.0.0"
     try:
@@ -720,10 +712,4 @@ if __name__ == '__main__':
     print("\n访问地址: http://localhost:5001")
     print("\n按 Ctrl+C 停止服务器\n")
     
-    def open_browser():
-        import time
-        time.sleep(1.5)
-        webbrowser.open('http://localhost:5001')
-    
-    threading.Thread(target=open_browser).start()
     app.run(debug=False, host='0.0.0.0', port=5001)

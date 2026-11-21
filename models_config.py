@@ -27,7 +27,8 @@ class ModelsConfig:
         if self.config_file.exists():
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    config = json.load(f)
+                    return self._normalize_config(config)
             except Exception as e:
                 print(f"加载配置文件失败: {e}")
                 return self._get_default_config()
@@ -37,9 +38,52 @@ class ModelsConfig:
     def _get_default_config(self) -> Dict:
         """获取默认配置"""
         return {
+            "providers": [],
             "models": [],
             "active_model": None
         }
+
+    def _normalize_config(self, config: Dict) -> Dict:
+        """兼容旧版 models.json，并补齐供应商信息。"""
+        config.setdefault("providers", [])
+        config.setdefault("models", [])
+        config.setdefault("active_model", None)
+
+        provider_aliases = {p.get("alias") for p in config["providers"]}
+        for model in config["models"]:
+            provider_alias = model.get("provider_alias") or model.get("alias")
+            model["provider_alias"] = provider_alias
+
+            if provider_alias not in provider_aliases:
+                config["providers"].append({
+                    "alias": provider_alias,
+                    "api_key": model.get("api_key", ""),
+                    "base_url": model.get("base_url", ""),
+                    "model_provider": model.get("model_provider", "openai")
+                })
+                provider_aliases.add(provider_alias)
+
+        return config
+
+    def _build_display_name(self, model: Dict) -> str:
+        provider_alias = model.get("provider_alias") or model.get("alias", "")
+        model_name = model.get("model_name", "")
+        return f"{provider_alias}-{model_name}" if model_name else provider_alias
+
+    def _generate_model_alias(self, provider_alias: str, model_name: str) -> str:
+        """为主流程生成稳定唯一的模型配置 ID。"""
+        base_alias = f"{provider_alias}-{model_name}"
+        existing = {
+            model.get("alias")
+            for model in self.config.get("models", [])
+        }
+        if base_alias not in existing:
+            return base_alias
+
+        index = 2
+        while f"{base_alias}-{index}" in existing:
+            index += 1
+        return f"{base_alias}-{index}"
     
     def _save_config(self) -> bool:
         """保存配置到文件"""
@@ -53,7 +97,100 @@ class ModelsConfig:
     
     def get_all_models(self) -> List[Dict]:
         """获取所有模型配置"""
-        return self.config.get("models", [])
+        models = []
+        for model in self.config.get("models", []):
+            normalized_model = dict(model)
+            normalized_model["provider_alias"] = (
+                normalized_model.get("provider_alias") or normalized_model.get("alias")
+            )
+            normalized_model["display_name"] = self._build_display_name(normalized_model)
+            models.append(normalized_model)
+        return models
+
+    def get_all_providers(self) -> List[Dict]:
+        """获取所有供应商配置"""
+        return self.config.get("providers", [])
+
+    def get_provider_by_alias(self, alias: str) -> Optional[Dict]:
+        """根据别名获取供应商配置"""
+        for provider in self.config.get("providers", []):
+            if provider.get("alias") == alias:
+                return provider
+        return None
+
+    def save_provider(self, alias: str, api_key: str, base_url: str,
+                      model_provider: str = "openai",
+                      original_alias: Optional[str] = None) -> bool:
+        """新增或更新供应商配置。"""
+        if not alias:
+            return False
+
+        original_alias = original_alias or alias
+        provider = self.get_provider_by_alias(original_alias)
+
+        if original_alias != alias and self.get_provider_by_alias(alias):
+            return False
+
+        if provider:
+            provider["alias"] = alias
+            provider["api_key"] = api_key
+            provider["base_url"] = base_url
+            provider["model_provider"] = model_provider
+        else:
+            self.config["providers"].append({
+                "alias": alias,
+                "api_key": api_key,
+                "base_url": base_url,
+                "model_provider": model_provider
+            })
+
+        for model in self.config.get("models", []):
+            if model.get("provider_alias") == original_alias:
+                model["provider_alias"] = alias
+                model["api_key"] = api_key
+                model["base_url"] = base_url
+                model["model_provider"] = model_provider
+
+        return self._save_config()
+
+    def delete_provider(self, alias: str) -> Optional[Dict]:
+        """删除供应商，并级联删除该供应商下的模型配置。"""
+        if not alias or not self.get_provider_by_alias(alias):
+            return None
+
+        models = self.config.get("models", [])
+        providers = self.config.get("providers", [])
+        removed_models = [
+            model for model in models
+            if (model.get("provider_alias") or model.get("alias")) == alias
+        ]
+        removed_model_aliases = {
+            model.get("alias")
+            for model in removed_models
+            if model.get("alias")
+        }
+
+        self.config["providers"] = [
+            provider for provider in providers
+            if provider.get("alias") != alias
+        ]
+        self.config["models"] = [
+            model for model in models
+            if (model.get("provider_alias") or model.get("alias")) != alias
+        ]
+
+        if self.config.get("active_model") in removed_model_aliases:
+            if self.config["models"]:
+                self.config["active_model"] = self.config["models"][0]["alias"]
+            else:
+                self.config["active_model"] = None
+
+        if not self._save_config():
+            return None
+
+        return {
+            "deleted_models": len(removed_models)
+        }
     
     def get_model_by_alias(self, alias: str) -> Optional[Dict]:
         """
@@ -72,7 +209,8 @@ class ModelsConfig:
     
     def add_model(self, alias: str, api_key: str, base_url: str, 
                   model_provider: str, model_name: str, custom_prompt: str = '',
-                  max_tokens: Optional[int] = None, temperature: Optional[float] = None) -> bool:
+                  max_tokens: Optional[int] = None, temperature: Optional[float] = None,
+                  provider_alias: Optional[str] = None) -> bool:
         """
         添加新的模型配置
         
@@ -89,12 +227,18 @@ class ModelsConfig:
         Returns:
             是否添加成功
         """
+        provider_alias = provider_alias or alias
+        alias = alias or self._generate_model_alias(provider_alias, model_name)
+
+        self.save_provider(provider_alias, api_key, base_url, model_provider)
+
         # 检查别名是否已存在
         if self.get_model_by_alias(alias):
             return False
         
         new_model = {
             "alias": alias,
+            "provider_alias": provider_alias,
             "api_key": api_key,
             "base_url": base_url,
             "model_provider": model_provider,
@@ -120,7 +264,8 @@ class ModelsConfig:
                      model_name: Optional[str] = None,
                      custom_prompt: Optional[str] = None,
                      max_tokens: Optional[int] = None,
-                     temperature: Optional[float] = None) -> bool:
+                     temperature: Optional[float] = None,
+                     provider_alias: Optional[str] = None) -> bool:
         """
         更新模型配置
         
@@ -149,12 +294,26 @@ class ModelsConfig:
             model["model_provider"] = model_provider
         if model_name is not None:
             model["model_name"] = model_name
+        if provider_alias is not None:
+            model["provider_alias"] = provider_alias
         if custom_prompt is not None:
             model["custom_prompt"] = custom_prompt
         if max_tokens is not None:
             model["max_tokens"] = max_tokens
+        else:
+            model.pop("max_tokens", None)
         if temperature is not None:
             model["temperature"] = temperature
+        else:
+            model.pop("temperature", None)
+
+        if provider_alias:
+            self.save_provider(
+                provider_alias,
+                model.get("api_key", ""),
+                model.get("base_url", ""),
+                model.get("model_provider", "openai")
+            )
         
         return self._save_config()
     
@@ -165,7 +324,8 @@ class ModelsConfig:
                      model_name: Optional[str] = None,
                      custom_prompt: Optional[str] = None,
                      max_tokens: Optional[int] = None,
-                     temperature: Optional[float] = None) -> bool:
+                     temperature: Optional[float] = None,
+                     provider_alias: Optional[str] = None) -> bool:
         """
         重命名模型并更新配置
         
@@ -204,12 +364,26 @@ class ModelsConfig:
             old_model["model_provider"] = model_provider
         if model_name is not None:
             old_model["model_name"] = model_name
+        if provider_alias is not None:
+            old_model["provider_alias"] = provider_alias
         if custom_prompt is not None:
             old_model["custom_prompt"] = custom_prompt
         if max_tokens is not None:
             old_model["max_tokens"] = max_tokens
+        else:
+            old_model.pop("max_tokens", None)
         if temperature is not None:
             old_model["temperature"] = temperature
+        else:
+            old_model.pop("temperature", None)
+
+        if provider_alias:
+            self.save_provider(
+                provider_alias,
+                old_model.get("api_key", ""),
+                old_model.get("base_url", ""),
+                old_model.get("model_provider", "openai")
+            )
         
         # 如果重命名的是活动模型，也要更新活动模型的别名
         if self.config.get("active_model") == old_alias:
@@ -277,6 +451,6 @@ class ModelsConfig:
         for model in self.config.get("models", []):
             models.append({
                 "alias": model["alias"],
-                "display_name": f"{model['alias']} - {model['model_name']}"
+                "display_name": self._build_display_name(model)
             })
         return models

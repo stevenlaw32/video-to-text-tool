@@ -58,19 +58,30 @@
             <p class="text-gray-600 mt-2">配置多个 AI 模型，快速切换使用</p>
         </div>
 
-        <!-- Model Selector -->
+        <!-- Saved Model Selector -->
         <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
             <div class="flex items-center justify-between mb-4">
                 <label class="text-lg font-semibold text-gray-800">
-                    <i class="fas fa-list mr-2 text-indigo-600"></i>选择模型配置
+                    <i class="fas fa-list mr-2 text-indigo-600"></i>已保存模型清单
                 </label>
-                <button onclick="showAddModelModal()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
-                    <i class="fas fa-plus mr-2"></i>添加新模型
-                </button>
+                <div class="flex items-center gap-3">
+                    <button onclick="startAddModel()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors">
+                        <i class="fas fa-plus mr-2"></i>增加模型
+                    </button>
+                    <button onclick="showAddModelModal()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors">
+                        <i class="fas fa-building-circle-plus mr-2"></i>添加供应商
+                    </button>
+                    <button onclick="showEditProviderModal()" class="px-4 py-2 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                        <i class="fas fa-pen mr-2"></i>编辑供应商
+                    </button>
+                    <button onclick="showDeleteProviderModal()" class="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                        <i class="fas fa-trash mr-2"></i>删除供应商
+                    </button>
+                </div>
             </div>
             
             <select id="modelSelector" onchange="loadModelConfig()" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
-                <option value="">-- 请选择模型 --</option>
+                <option value="">-- 请选择已保存模型 --</option>
             </select>
         </div>
 
@@ -79,21 +90,36 @@
             <div class="grid grid-cols-2 gap-8">
                 <!-- Left: Form Fields -->
                 <form id="modelForm" class="space-y-6">
-                <!-- Model Alias -->
+                <!-- Provider Selector -->
+                <div>
+                    <label for="providerSelector" class="block text-sm font-semibold text-gray-700 mb-2">
+                        <i class="fas fa-building mr-2 text-indigo-600"></i>选择供应商
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <select
+                        id="providerSelector"
+                        onchange="loadProviderConfig()"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                        <option value="">-- 请先添加供应商 --</option>
+                    </select>
+                </div>
+
+                <!-- Provider Alias -->
                 <div>
                     <label for="modelAlias" class="block text-sm font-semibold text-gray-700 mb-2">
-                        <i class="fas fa-tag mr-2 text-indigo-600"></i>模型别名
+                        <i class="fas fa-tag mr-2 text-indigo-600"></i>供应商别名
                         <span class="text-red-500">*</span>
                     </label>
                     <input 
                         type="text" 
                         id="modelAlias" 
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        placeholder="例如：星火Claude、OpenAI官方"
+                        placeholder="例如：万量、OpenAI官方"
                         required
                     >
                     <p class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-info-circle mr-1"></i>用于识别此配置的名称
+                        <i class="fas fa-info-circle mr-1"></i>用于识别 API 供应商，保存模型时会显示为“供应商别名-模型名”
                     </p>
                 </div>
 
@@ -140,7 +166,7 @@
                 <!-- Model Provider -->
                 <div>
                     <label for="modelProvider" class="block text-sm font-semibold text-gray-700 mb-2">
-                        <i class="fas fa-server mr-2 text-indigo-600"></i>Model Provider
+                        <i class="fas fa-server mr-2 text-indigo-600"></i>接口类型
                     </label>
                     <select 
                         id="modelProvider" 
@@ -167,10 +193,12 @@
                         id="modelName" 
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                         placeholder="gpt-4o"
+                        autocomplete="off"
+                        spellcheck="false"
                         required
                     >
                     <p class="text-xs text-gray-500 mt-1">
-                        <i class="fas fa-info-circle mr-1"></i>例如：gpt-4o, claude-4-sonnet-thinking 等
+                        <i class="fas fa-info-circle mr-1"></i>可手动输入；从右侧列表选择后会自动填入这里
                     </p>
                 </div>
 
@@ -202,14 +230,14 @@
                                     id="temperatureRange" 
                                     min="0" max="2" step="0.1" value="0.7"
                                     class="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                                    oninput="document.getElementById('temperature').value = this.value; document.getElementById('tempDisplay').textContent = this.value"
+                                    oninput="document.getElementById('temperature').value = this.value"
                                 >
                                 <input 
                                     type="number" 
                                     id="temperature" 
                                     min="0" max="2" step="0.1" value="0.7"
                                     class="w-16 px-2 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm text-center"
-                                    oninput="document.getElementById('temperatureRange').value = this.value; document.getElementById('tempDisplay').textContent = this.value"
+                                    oninput="document.getElementById('temperatureRange').value = this.value"
                                 >
                             </div>
                             <p class="text-xs text-gray-400 mt-1">0=精确  0.7=平衡  2=创意</p>
@@ -224,25 +252,37 @@
                             <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>自定义提示词
                             <span class="text-gray-500 text-xs font-normal ml-2">(可选)</span>
                         </label>
-                        <button 
-                            type="button" 
-                            onclick="useDefaultPrompt()" 
-                            class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-                        >
-                            <i class="fas fa-undo mr-1"></i>使用默认提示词
-                        </button>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-gray-400">默认模板</span>
+                            <button
+                                type="button"
+                                id="presetRestructureBtn"
+                                onclick="usePromptPreset('restructure')"
+                                class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                            >
+                                整理重排
+                            </button>
+                            <button
+                                type="button"
+                                id="presetFaithfulBtn"
+                                onclick="usePromptPreset('faithful')"
+                                class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                            >
+                                尊重原文
+                            </button>
+                        </div>
                     </div>
                     <p class="text-xs text-gray-600 mb-2">
-                        <i class="fas fa-info-circle mr-1"></i>使用 <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">{transcript}</code> 作为占位符
+                        <i class="fas fa-info-circle mr-1"></i>使用 <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">{transcript}</code> 作为占位符。点选模板后仍可再改。
                     </p>
                     <textarea 
                         id="customPrompt" 
                         rows="8"
                         class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm"
-                        placeholder="留空则使用默认提示词..."
+                        placeholder="留空则使用「整理重排」..."
                     ></textarea>
                     <p class="text-xs text-gray-500 mt-1">
-                        为此模型设置专属的提示词，留空则使用系统默认提示词
+                        为此模型设置专属的提示词。留空则使用「整理重排」。
                     </p>
                 </div>
                 </form>
@@ -271,7 +311,7 @@
                             <div class="flex items-center justify-center h-full text-gray-400">
                                 <div class="text-center">
                                     <i class="fas fa-inbox text-4xl mb-2"></i>
-                                    <p class="text-sm">请填写 API Key 和 Base URL，<br>然后点击"获取模型"按钮</p>
+                                    <p class="text-sm">请填写 API Key 和 Base URL，<br>然后点击"获取模型"按钮，或在左侧手动填写模型 ID</p>
                                 </div>
                             </div>
                         </div>
@@ -316,42 +356,176 @@
                     type="button" 
                     onclick="document.getElementById('modelForm').requestSubmit()"
                     class="flex-1 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors"
+                    id="saveModelBtn"
                 >
-                    <i class="fas fa-save mr-2"></i>保存配置
+                    <i class="fas fa-save mr-2"></i>保存模型配置
                 </button>
                 <button 
                     type="button" 
                     onclick="deleteModel()" 
                     class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors"
+                    id="deleteModelBtn"
                 >
-                    <i class="fas fa-trash mr-2"></i>删除
+                    <i class="fas fa-trash mr-2"></i>删除模型配置
                 </button>
             </div>
         </div>
 
     </div>
 
-    <!-- Add Model Modal -->
+    <!-- Add Provider Modal -->
     <div id="addModelModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
             <h3 class="text-2xl font-semibold text-gray-800 mb-4">
-                <i class="fas fa-plus-circle mr-2 text-green-600"></i>添加新模型
+                <i class="fas fa-plus-circle mr-2 text-green-600"></i>添加供应商
             </h3>
             <div class="mb-4">
-                <label class="block text-sm font-semibold text-gray-700 mb-2">模型别名</label>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">供应商别名</label>
                 <input 
                     type="text" 
                     id="newModelAlias" 
                     class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-                    placeholder="例如：星火Claude"
+                    placeholder="例如：万量"
                 >
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">API Key</label>
+                <input
+                    type="text"
+                    id="newProviderApiKey"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="sk-..."
+                >
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Base URL</label>
+                <input
+                    type="url"
+                    id="newProviderBaseUrl"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="https://api.openai.com/v1"
+                >
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-gray-700 mb-2">接口类型</label>
+                <select
+                    id="newProviderType"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                >
+                    <option value="openai" selected>OpenAI</option>
+                    <option value="openai-completion">OpenAI Completion</option>
+                    <option value="azure">Azure OpenAI</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="qwen">通义千问</option>
+                    <option value="zhipu">智谱 AI</option>
+                    <option value="custom">自定义</option>
+                </select>
             </div>
             <div class="flex justify-end space-x-2">
                 <button onclick="hideAddModelModal()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                     取消
                 </button>
                 <button onclick="addNewModel()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
-                    添加
+                    保存供应商
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Provider Modal -->
+    <div id="editProviderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-pen mr-2 text-indigo-600"></i>编辑供应商
+            </h3>
+            <div class="mb-4">
+                <label for="editProviderSelector" class="block text-sm font-semibold text-gray-700 mb-2">选择供应商</label>
+                <select
+                    id="editProviderSelector"
+                    onchange="fillEditProviderFields(this.value)"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                >
+                    <option value="">-- 请选择供应商 --</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label for="editProviderAlias" class="block text-sm font-semibold text-gray-700 mb-2">供应商别名</label>
+                <input
+                    type="text"
+                    id="editProviderAlias"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="例如：万量"
+                >
+            </div>
+            <div class="mb-4">
+                <label for="editProviderApiKey" class="block text-sm font-semibold text-gray-700 mb-2">API Key</label>
+                <input
+                    type="text"
+                    id="editProviderApiKey"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="sk-..."
+                >
+            </div>
+            <div class="mb-4">
+                <label for="editProviderBaseUrl" class="block text-sm font-semibold text-gray-700 mb-2">Base URL</label>
+                <input
+                    type="url"
+                    id="editProviderBaseUrl"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                    placeholder="https://api.openai.com/v1"
+                >
+            </div>
+            <div class="mb-4">
+                <label for="editProviderType" class="block text-sm font-semibold text-gray-700 mb-2">接口类型</label>
+                <select
+                    id="editProviderType"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                >
+                    <option value="openai" selected>OpenAI</option>
+                    <option value="openai-completion">OpenAI Completion</option>
+                    <option value="azure">Azure OpenAI</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                    <option value="qwen">通义千问</option>
+                    <option value="zhipu">智谱 AI</option>
+                    <option value="custom">自定义</option>
+                </select>
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button onclick="hideEditProviderModal()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                    取消
+                </button>
+                <button onclick="saveEditedProvider()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                    保存供应商
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Provider Modal -->
+    <div id="deleteProviderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-semibold text-gray-800 mb-4">
+                <i class="fas fa-trash mr-2 text-red-600"></i>删除供应商
+            </h3>
+            <div class="mb-4">
+                <label for="deleteProviderSelector" class="block text-sm font-semibold text-gray-700 mb-2">选择供应商</label>
+                <select
+                    id="deleteProviderSelector"
+                    onchange="updateDeleteProviderSummary()"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                >
+                    <option value="">-- 请选择供应商 --</option>
+                </select>
+            </div>
+            <div id="deleteProviderSummary" class="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">
+                删除供应商会同时删除其下已保存的模型配置。
+            </div>
+            <div class="flex justify-end space-x-2">
+                <button onclick="hideDeleteProviderModal()" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                    取消
+                </button>
+                <button onclick="deleteProvider()" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                    删除供应商
                 </button>
             </div>
         </div>
@@ -359,28 +533,119 @@
 
     <script>
         let currentModels = [];
-        let originalAlias = ''; // 保存原始别名，用于重命名
+        let currentProviders = [];
+        let originalAlias = '';
+        let originalProviderAlias = '';
+        let currentFormMode = 'edit';
 
-        // 页面加载时获取所有模型
+        function getModelDisplayName(model) {
+            if (model.display_name) return model.display_name;
+            const providerAlias = model.provider_alias || model.alias || '';
+            return model.model_name ? `${providerAlias}-${model.model_name}` : providerAlias;
+        }
+
+        // 页面加载时获取供应商和模型
         window.addEventListener('DOMContentLoaded', async () => {
+            await loadPromptPresets();
+            await loadProvidersList();
             await loadModelsList();
         });
 
-        // 加载模型列表
+        function setLockedVisualState(element, locked) {
+            element.classList.toggle('bg-gray-100', locked);
+            element.classList.toggle('text-gray-500', locked);
+            element.classList.toggle('cursor-not-allowed', locked);
+        }
+
+        function setFormMode(mode) {
+            currentFormMode = mode;
+            const isEditMode = mode === 'edit';
+
+            const providerSelector = document.getElementById('providerSelector');
+            const providerAliasInput = document.getElementById('modelAlias');
+            const baseUrlInput = document.getElementById('baseUrl');
+            const modelProviderSelect = document.getElementById('modelProvider');
+            const modelNameInput = document.getElementById('modelName');
+            const fetchModelsBtn = document.getElementById('fetchModelsBtn');
+            const modelSearch = document.getElementById('modelSearch');
+            const deleteModelBtn = document.getElementById('deleteModelBtn');
+            const saveModelBtn = document.getElementById('saveModelBtn');
+
+            providerSelector.disabled = isEditMode;
+            providerAliasInput.readOnly = true;
+            baseUrlInput.readOnly = true;
+            modelProviderSelect.disabled = true;
+            modelNameInput.readOnly = false;
+            fetchModelsBtn.disabled = isEditMode;
+            modelSearch.disabled = isEditMode;
+
+            setLockedVisualState(providerSelector, isEditMode);
+            setLockedVisualState(providerAliasInput, true);
+            setLockedVisualState(baseUrlInput, true);
+            setLockedVisualState(modelProviderSelect, true);
+            setLockedVisualState(modelNameInput, false);
+            setLockedVisualState(fetchModelsBtn, isEditMode);
+            setLockedVisualState(modelSearch, isEditMode);
+
+            if (isEditMode) {
+                deleteModelBtn.classList.remove('hidden');
+                saveModelBtn.innerHTML = '<i class="fas fa-save mr-2"></i>保存模型配置';
+            } else {
+                deleteModelBtn.classList.add('hidden');
+                saveModelBtn.innerHTML = '<i class="fas fa-save mr-2"></i>保存新增模型';
+            }
+        }
+
+        async function loadProvidersList(selectedAlias = '') {
+            try {
+                const response = await fetch('/api/models/providers');
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || '供应商加载失败');
+                }
+
+                currentProviders = data.providers || [];
+                const selector = document.getElementById('providerSelector');
+                selector.innerHTML = '<option value="">-- 请选择供应商 --</option>';
+
+                currentProviders.forEach(provider => {
+                    const option = document.createElement('option');
+                    option.value = provider.alias;
+                    option.textContent = provider.alias;
+                    selector.appendChild(option);
+                });
+
+                if (selectedAlias) {
+                    selector.value = selectedAlias;
+                    if (currentFormMode === 'add') {
+                        fillProviderFields(selectedAlias);
+                    }
+                }
+
+                refreshEditProviderSelector(selectedAlias);
+                refreshDeleteProviderSelector(selectedAlias);
+            } catch (error) {
+                console.error('加载供应商列表失败:', error);
+            }
+        }
+
+        // 加载已保存模型列表
         async function loadModelsList() {
             try {
                 const response = await fetch('/api/models/list');
                 const data = await response.json();
                 
                 if (data.success) {
-                    currentModels = data.models;
+                    currentModels = data.models || [];
+                    refreshDeleteProviderSelector();
                     const selector = document.getElementById('modelSelector');
-                    selector.innerHTML = '<option value="">-- 请选择模型 --</option>';
+                    selector.innerHTML = '<option value="">-- 请选择已保存模型 --</option>';
                     
-                    data.models.forEach(model => {
+                    currentModels.forEach(model => {
                         const option = document.createElement('option');
                         option.value = model.alias;
-                        option.textContent = `${model.alias} - ${model.model_name}`;
+                        option.textContent = getModelDisplayName(model);
                         if (model.alias === data.active_model) {
                             option.textContent += ' (当前使用)';
                             option.selected = true;
@@ -388,8 +653,7 @@
                         selector.appendChild(option);
                     });
                     
-                    // 如果有活动模型，自动加载
-                    if (data.active_model) {
+                    if (data.active_model && currentFormMode !== 'add') {
                         loadModelConfig();
                     }
                 }
@@ -408,10 +672,11 @@
             
             const model = currentModels.find(m => m.alias === alias);
             if (model) {
-                // 保存原始别名
+                setFormMode('edit');
                 originalAlias = model.alias;
-                
-                document.getElementById('modelAlias').value = model.alias;
+                const providerAlias = model.provider_alias || model.alias;
+                document.getElementById('providerSelector').value = providerAlias;
+                fillProviderFields(providerAlias, model);
                 document.getElementById('apiKey').value = model.api_key;
                 document.getElementById('baseUrl').value = model.base_url;
                 document.getElementById('modelProvider').value = model.model_provider;
@@ -422,73 +687,389 @@
                 document.getElementById('temperatureRange').value = temp;
                 document.getElementById('customPrompt').value = model.custom_prompt || '';
                 document.getElementById('configForm').classList.remove('hidden');
+                resetAvailableModelsList('已加载保存模型；如需添加其它模型，请点击“增加模型”。');
             }
         }
 
-        // 默认提示词
-        const DEFAULT_PROMPT = `# Role
-你是一位精通多领域知识建模的"深度内容架构师"。你的任务是将视频转录文本（ASR）加工成一份逻辑严密、细节丰满、且具备极高可读性的 Markdown 深度笔记。
+        function fillProviderFields(providerAlias, fallback = null) {
+            const provider = currentProviders.find(p => p.alias === providerAlias) || fallback;
+            if (!provider) return;
 
-# Core Objective
-**信息无损还原**：让从未看过原视频的读者，通过阅读本文档，能完全掌握视频中的核心逻辑、具体方法论、生动案例以及所有的关键细节，严禁过度简化。
+            originalProviderAlias = providerAlias;
+            document.getElementById('modelAlias').value = providerAlias;
+            document.getElementById('apiKey').value = provider.api_key || '';
+            document.getElementById('baseUrl').value = provider.base_url || '';
+            document.getElementById('modelProvider').value = provider.model_provider || 'openai';
+        }
 
-# Task Goals
-1. **拒绝干条目**：不仅记录结论，更要保留得出结论的推导过程、背景原因、以及博主使用的类比和例子。
-2. **场景与细节复刻**：保留视频中提及的具体参数（如数值、设置）、具体话术（如交友/职场沟通）、以及具体的合规/避坑细节。
-3. **结构化重组**：打破零散的口语顺序，按照最符合认知逻辑的结构重新组织内容。
+        function loadProviderConfig() {
+            const providerAlias = document.getElementById('providerSelector').value;
+            if (!providerAlias) return;
 
-# Processing Logic (Adaptive)
-请根据输入内容的本质属性，自动匹配最佳逻辑框架：
+            fillProviderFields(providerAlias);
+            if (currentFormMode === 'add') {
+                resetModelEditor();
+            }
+            document.getElementById('configForm').classList.remove('hidden');
+        }
 
-1. **【决策/合规/策略类】（侧重逻辑与方案）**：
-   - 框架：背景趋势 -> 核心痛点/风险分析 -> 深度解决方案（分点详述） -> 实施建议/风险规避。
-2. **【理论/体系/心理类】（侧重概念与理解）**：
-   - 框架：核心概念界定 -> 底层原理/逻辑拆解（保留生动类比） -> 现实应用场景 -> 认知升级/延伸思考。
-3. **【技能/实操/方法类】（侧重动作与流程）**：
-   - 框架：目标设定 -> 详细分步拆解（含操作要点） -> 关键细节/常见错误 -> 进阶技巧/复盘建议。
-4. **【观点/启发/思维类】（侧重洞察与改变）**：
-   - 框架：现状观察/痛点挖掘 -> 核心思维转折点 -> 行动指南/具体建议 -> 价值升华/金句提炼。
+        function resetModelEditor() {
+            originalAlias = '';
+            document.getElementById('modelSelector').value = '';
+            document.getElementById('modelName').value = '';
+            document.getElementById('maxTokens').value = '';
+            document.getElementById('temperature').value = '0.7';
+            document.getElementById('temperatureRange').value = '0.7';
+            document.getElementById('customPrompt').value = '';
+        }
 
-# Content Requirements (Rich & Descriptive)
-- **多级标题**：严禁结构扁平。必须根据内容复杂度灵活使用 \`##\`, \`###\`, 甚至 \`####\` 来构建知识索引。
-- **案例扩充**：若视频中提到案例、实验或故事，请详细描述其过程、转折和结论，使其具备"故事性"和"说服力"。
-- **解释性写作**：保留博主对专业术语的通俗化解释，确保文档对"门外汉"友好。
-- **模块化总结**：在每一个二级标题（##）的末尾，添加一个引用块：
-  > **💡 核心萃取：** [用一句话提炼本章节的底层逻辑或核心价值，必须具备启发性]
+        function resetAvailableModelsList(message = '请选择供应商后点击“获取模型”按钮，或在左侧手动填写模型 ID') {
+            availableModels = [];
+            filteredModels = [];
+            modelsEmptyMessage = message;
+            document.getElementById('modelSearch').value = '';
+            document.getElementById('modelsCount').textContent = '';
+            document.getElementById('modelsPagination').classList.add('hidden');
+            document.getElementById('modelsList').innerHTML = `
+                <div class="flex items-center justify-center h-full text-gray-400">
+                    <div class="text-center">
+                        <i class="fas fa-inbox text-4xl mb-2"></i>
+                        <p class="text-sm">${message}</p>
+                    </div>
+                </div>
+            `;
+        }
 
-# Tone & Style
-- 风格：客观、详尽、富有条理。
-- 目标：将"碎片化的口语"转化为"系统化的书面知识体系"。`;
+        function startAddModel() {
+            if (currentProviders.length === 0) {
+                showStatus('请先添加供应商，再为供应商增加模型', 'error');
+                showAddModelModal();
+                return;
+            }
 
-        // 使用默认提示词
-        function useDefaultPrompt() {
-            document.getElementById('customPrompt').value = DEFAULT_PROMPT;
-            showStatus('已设置为默认提示词', 'success');
+            setFormMode('add');
+            originalAlias = '';
+            document.getElementById('modelSelector').value = '';
+            document.getElementById('providerSelector').value = currentProviders[0].alias;
+            fillProviderFields(currentProviders[0].alias);
+            resetModelEditor();
+            resetAvailableModelsList();
+            document.getElementById('configForm').classList.remove('hidden');
+            showStatus('请选择供应商，然后点击“获取模型”选择模型，或直接手动填写模型 ID', 'info');
+        }
+
+        function getProviderModelCount(providerAlias) {
+            return currentModels.filter(model => {
+                return (model.provider_alias || model.alias) === providerAlias;
+            }).length;
+        }
+
+        function refreshEditProviderSelector(selectedAlias = '') {
+            const selector = document.getElementById('editProviderSelector');
+            if (!selector) return;
+
+            selector.innerHTML = '<option value="">-- 请选择供应商 --</option>';
+            currentProviders.forEach(provider => {
+                const option = document.createElement('option');
+                option.value = provider.alias;
+                option.textContent = provider.alias;
+                selector.appendChild(option);
+            });
+
+            const fallbackAlias = document.getElementById('providerSelector').value || '';
+            const nextAlias = selectedAlias || fallbackAlias || (currentProviders[0] && currentProviders[0].alias) || '';
+            if (nextAlias && currentProviders.some(provider => provider.alias === nextAlias)) {
+                selector.value = nextAlias;
+                fillEditProviderFields(nextAlias);
+            } else {
+                fillEditProviderFields('');
+            }
+        }
+
+        function showEditProviderModal() {
+            if (currentProviders.length === 0) {
+                showStatus('暂无可编辑的供应商', 'error');
+                return;
+            }
+
+            refreshEditProviderSelector();
+            document.getElementById('editProviderModal').classList.remove('hidden');
+        }
+
+        function hideEditProviderModal() {
+            document.getElementById('editProviderModal').classList.add('hidden');
+        }
+
+        function fillEditProviderFields(providerAlias) {
+            const provider = currentProviders.find(item => item.alias === providerAlias);
+            document.getElementById('editProviderAlias').value = provider ? provider.alias : '';
+            document.getElementById('editProviderApiKey').value = provider ? provider.api_key || '' : '';
+            document.getElementById('editProviderBaseUrl').value = provider ? provider.base_url || '' : '';
+            document.getElementById('editProviderType').value = provider ? provider.model_provider || 'openai' : 'openai';
+        }
+
+        async function saveEditedProvider() {
+            const originalAliasForEdit = document.getElementById('editProviderSelector').value;
+            const alias = document.getElementById('editProviderAlias').value.trim();
+            const apiKey = document.getElementById('editProviderApiKey').value.trim();
+            const baseUrl = document.getElementById('editProviderBaseUrl').value.trim();
+            const modelProvider = document.getElementById('editProviderType').value;
+
+            if (!originalAliasForEdit) {
+                showStatus('请选择要编辑的供应商', 'error');
+                return;
+            }
+            if (!alias || !apiKey || !baseUrl) {
+                showStatus('请填写供应商别名、API Key 和 Base URL', 'error');
+                return;
+            }
+
+            const wasAddMode = currentFormMode === 'add';
+            const selectedModelAlias = document.getElementById('modelSelector').value;
+
+            try {
+                const response = await fetch('/api/models/providers/save', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        original_alias: originalAliasForEdit,
+                        alias: alias,
+                        api_key: apiKey,
+                        base_url: baseUrl,
+                        model_provider: modelProvider
+                    })
+                });
+
+                const result = await response.json();
+                if (!result.success) {
+                    showStatus('供应商保存失败: ' + result.error, 'error');
+                    return;
+                }
+
+                hideEditProviderModal();
+                originalProviderAlias = alias;
+                await loadProvidersList(alias);
+                await loadModelsList();
+
+                if (wasAddMode) {
+                    setFormMode('add');
+                    document.getElementById('providerSelector').value = alias;
+                    fillProviderFields(alias);
+                    resetModelEditor();
+                    resetAvailableModelsList();
+                } else if (selectedModelAlias && currentModels.some(model => model.alias === selectedModelAlias)) {
+                    document.getElementById('modelSelector').value = selectedModelAlias;
+                    loadModelConfig();
+                } else if (!document.getElementById('modelSelector').value) {
+                    document.getElementById('configForm').classList.add('hidden');
+                }
+
+                showStatus('供应商保存成功，相关模型配置已同步更新', 'success');
+            } catch (error) {
+                showStatus('供应商保存失败: ' + error.message, 'error');
+            }
+        }
+
+        function refreshDeleteProviderSelector(selectedAlias = '') {
+            const selector = document.getElementById('deleteProviderSelector');
+            if (!selector) return;
+
+            selector.innerHTML = '<option value="">-- 请选择供应商 --</option>';
+            currentProviders.forEach(provider => {
+                const option = document.createElement('option');
+                option.value = provider.alias;
+                option.textContent = provider.alias;
+                selector.appendChild(option);
+            });
+
+            const fallbackAlias = document.getElementById('providerSelector').value || '';
+            const nextAlias = selectedAlias || fallbackAlias;
+            if (nextAlias && currentProviders.some(provider => provider.alias === nextAlias)) {
+                selector.value = nextAlias;
+            }
+            updateDeleteProviderSummary();
+        }
+
+        function showDeleteProviderModal() {
+            if (currentProviders.length === 0) {
+                showStatus('暂无可删除的供应商', 'error');
+                return;
+            }
+
+            refreshDeleteProviderSelector();
+            document.getElementById('deleteProviderModal').classList.remove('hidden');
+        }
+
+        function hideDeleteProviderModal() {
+            document.getElementById('deleteProviderModal').classList.add('hidden');
+        }
+
+        function updateDeleteProviderSummary() {
+            const selector = document.getElementById('deleteProviderSelector');
+            const summary = document.getElementById('deleteProviderSummary');
+            if (!selector || !summary) return;
+
+            const providerAlias = selector.value;
+            if (!providerAlias) {
+                summary.textContent = '删除供应商会同时删除其下已保存的模型配置。';
+                return;
+            }
+
+            const modelCount = getProviderModelCount(providerAlias);
+            summary.textContent = modelCount > 0
+                ? `将删除供应商“${providerAlias}”，并同时删除其下 ${modelCount} 个已保存模型配置。`
+                : `将删除供应商“${providerAlias}”。该供应商下暂无已保存模型。`;
+        }
+
+        async function deleteProvider() {
+            const providerAlias = document.getElementById('deleteProviderSelector').value;
+            if (!providerAlias) {
+                showStatus('请选择要删除的供应商', 'error');
+                return;
+            }
+
+            const modelCount = getProviderModelCount(providerAlias);
+            const confirmMessage = modelCount > 0
+                ? `确定要删除供应商“${providerAlias}”吗？\n\n该操作会同时删除其下 ${modelCount} 个已保存模型配置。`
+                : `确定要删除供应商“${providerAlias}”吗？`;
+            if (!confirm(confirmMessage)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/models/providers/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({alias: providerAlias})
+                });
+
+                const result = await response.json();
+                if (!result.success) {
+                    showStatus('供应商删除失败: ' + result.error, 'error');
+                    return;
+                }
+
+                hideDeleteProviderModal();
+                originalAlias = '';
+                originalProviderAlias = '';
+                setFormMode('edit');
+                document.getElementById('configForm').classList.add('hidden');
+                document.getElementById('modelSelector').value = '';
+                await loadProvidersList();
+                await loadModelsList();
+                resetAvailableModelsList();
+
+                const deletedModels = result.deleted_models || 0;
+                const suffix = deletedModels > 0 ? `，并删除 ${deletedModels} 个模型配置` : '';
+                showStatus(`供应商删除成功${suffix}`, 'success');
+            } catch (error) {
+                showStatus('供应商删除失败: ' + error.message, 'error');
+            }
+        }
+
+        let promptPresets = [];
+        let defaultPresetId = 'restructure';
+
+        async function loadPromptPresets() {
+            try {
+                const response = await fetch('/api/models/prompt_presets');
+                const result = await response.json();
+                if (result.success && Array.isArray(result.presets)) {
+                    promptPresets = result.presets;
+                    defaultPresetId = result.default_id || 'restructure';
+                }
+            } catch (error) {
+                console.error('加载默认提示词模板失败:', error);
+            }
+        }
+
+        function usePromptPreset(presetId) {
+            const preset = promptPresets.find(item => item.id === presetId);
+            if (!preset) {
+                showStatus('默认模板加载失败，请刷新页面后再试', 'error');
+                return;
+            }
+            document.getElementById('customPrompt').value = preset.prompt;
+            showStatus(`已填入「${preset.name}」：${preset.description}`, 'success');
+        }
+
+        async function saveProviderConfig() {
+            const providerAlias = document.getElementById('modelAlias').value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const baseUrl = document.getElementById('baseUrl').value.trim();
+            const modelProvider = document.getElementById('modelProvider').value;
+
+            if (!providerAlias || !apiKey || !baseUrl) {
+                showStatus('请先填写供应商别名、API Key 和 Base URL', 'error');
+                return false;
+            }
+
+            const response = await fetch('/api/models/providers/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    original_alias: originalProviderAlias || providerAlias,
+                    alias: providerAlias,
+                    api_key: apiKey,
+                    base_url: baseUrl,
+                    model_provider: modelProvider
+                })
+            });
+
+            const result = await response.json();
+            if (!result.success) {
+                showStatus('供应商保存失败: ' + result.error, 'error');
+                return false;
+            }
+
+            originalProviderAlias = providerAlias;
+            await loadProvidersList(providerAlias);
+            return true;
         }
 
         // 保存模型配置
         document.getElementById('modelForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const newAlias = document.getElementById('modelAlias').value;
+            const providerAlias = document.getElementById('modelAlias').value.trim();
+            const modelName = document.getElementById('modelName').value.trim();
+
+            if (!providerAlias) {
+                showStatus('请先选择供应商', 'error');
+                return;
+            }
+
+            if (!modelName) {
+                showStatus('请填写模型 ID；可以手动输入，或点击“获取模型”后从右侧列表选择', 'error');
+                return;
+            }
             
             const maxTokensVal = document.getElementById('maxTokens').value;
             const temperatureVal = document.getElementById('temperature').value;
+            const existingModel = currentModels.find(model => {
+                return (model.provider_alias || model.alias) === providerAlias && model.model_name === modelName;
+            });
+            const targetAlias = originalAlias || (existingModel && existingModel.alias) || '';
 
             const formData = {
-                original_alias: originalAlias,  // 原始别名
-                alias: newAlias,                // 新别名（可能被修改）
+                original_alias: targetAlias,
+                alias: targetAlias || null,
+                provider_alias: providerAlias,
                 api_key: document.getElementById('apiKey').value,
                 base_url: document.getElementById('baseUrl').value,
                 model_provider: document.getElementById('modelProvider').value,
-                model_name: document.getElementById('modelName').value,
+                model_name: modelName,
                 custom_prompt: document.getElementById('customPrompt').value,
                 max_tokens: maxTokensVal ? parseInt(maxTokensVal) : null,
                 temperature: temperatureVal !== '' ? parseFloat(temperatureVal) : null
             };
             
             try {
-                const response = await fetch('/api/models/update', {
+                const providerSaved = await saveProviderConfig();
+                if (!providerSaved) return;
+
+                const endpoint = targetAlias ? '/api/models/update' : '/api/models/add';
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(formData)
@@ -497,14 +1078,15 @@
                 const result = await response.json();
                 
                 if (result.success) {
-                    showStatus('配置保存成功！', 'success');
-                    // 保存当前选中的模型别名（使用新别名）
-                    const currentAlias = document.getElementById('modelAlias').value;
-                    // 更新原始别名为新别名
-                    originalAlias = currentAlias;
+                    showStatus('模型配置保存成功！', 'success');
                     await loadModelsList();
-                    // 重新选中并加载刚才保存的模型
-                    document.getElementById('modelSelector').value = currentAlias;
+                    const savedModel = currentModels.find(model => {
+                        return (model.provider_alias || model.alias) === providerAlias && model.model_name === modelName;
+                    });
+                    if (savedModel) {
+                        originalAlias = savedModel.alias;
+                        document.getElementById('modelSelector').value = savedModel.alias;
+                    }
                     loadModelConfig();
                 } else {
                     showStatus('保存失败: ' + result.error, 'error');
@@ -514,35 +1096,40 @@
             }
         });
 
-        // 显示添加模型对话框
+        // 显示添加供应商对话框
         function showAddModelModal() {
             document.getElementById('addModelModal').classList.remove('hidden');
             document.getElementById('newModelAlias').value = '';
+            document.getElementById('newProviderApiKey').value = '';
+            document.getElementById('newProviderBaseUrl').value = '';
+            document.getElementById('newProviderType').value = 'openai';
         }
 
-        // 隐藏添加模型对话框
+        // 隐藏添加供应商对话框
         function hideAddModelModal() {
             document.getElementById('addModelModal').classList.add('hidden');
         }
 
-        // 添加新模型
+        // 添加供应商
         async function addNewModel() {
             const alias = document.getElementById('newModelAlias').value.trim();
-            if (!alias) {
-                alert('请输入模型别名');
+            const apiKey = document.getElementById('newProviderApiKey').value.trim();
+            const baseUrl = document.getElementById('newProviderBaseUrl').value.trim();
+
+            if (!alias || !apiKey || !baseUrl) {
+                alert('请填写供应商别名、API Key 和 Base URL');
                 return;
             }
             
             try {
-                const response = await fetch('/api/models/add', {
+                const response = await fetch('/api/models/providers/save', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         alias: alias,
-                        api_key: '',
-                        base_url: 'https://api.openai.com/v1',
-                        model_provider: 'openai',
-                        model_name: 'gpt-4o'
+                        api_key: apiKey,
+                        base_url: baseUrl,
+                        model_provider: document.getElementById('newProviderType').value
                     })
                 });
                 
@@ -550,15 +1137,14 @@
                 
                 if (result.success) {
                     hideAddModelModal();
-                    await loadModelsList();
-                    document.getElementById('modelSelector').value = alias;
-                    loadModelConfig();
-                    showStatus('模型添加成功！请填写配置信息', 'success');
+                    await loadProvidersList(alias);
+                    document.getElementById('configForm').classList.remove('hidden');
+                    showStatus('供应商保存成功！可以点击“获取模型”选择模型，也可以手动填写模型 ID', 'success');
                 } else {
-                    alert('添加失败: ' + result.error);
+                    alert('保存失败: ' + result.error);
                 }
             } catch (error) {
-                alert('添加失败: ' + error.message);
+                alert('保存失败: ' + error.message);
             }
         }
 
@@ -600,8 +1186,13 @@
 
         // 删除模型
         async function deleteModel() {
-            const alias = document.getElementById('modelAlias').value;
-            if (!confirm(`确定要删除模型配置"${alias}"吗？`)) {
+            const alias = originalAlias || document.getElementById('modelSelector').value;
+            const modelName = document.getElementById('modelName').value;
+            if (!alias) {
+                showStatus('当前没有已保存的模型配置可删除', 'error');
+                return;
+            }
+            if (!confirm(`确定要删除模型配置"${modelName}"吗？`)) {
                 return;
             }
             
@@ -672,10 +1263,21 @@
         let availableModels = [];
         let filteredModels = [];
         let currentPage = 1;
+        let modelsEmptyMessage = '暂无模型数据，可在左侧手动填写模型 ID';
         const modelsPerPage = 8;
 
         // 获取模型列表
         async function fetchModelsList() {
+            if (currentFormMode !== 'add') {
+                showStatus('编辑已保存模型时不加载右侧可选列表；如需添加其它模型，请点击“增加模型”', 'info');
+                return;
+            }
+
+            if (!document.getElementById('providerSelector').value) {
+                showStatus('请先选择供应商', 'error');
+                return;
+            }
+
             const apiKey = document.getElementById('apiKey').value;
             const baseUrl = document.getElementById('baseUrl').value;
             
@@ -691,24 +1293,30 @@
             fetchBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>获取中...';
             
             try {
-                const response = await fetch(baseUrl.replace(/\/$/, '') + '/models', {
-                    headers: {
-                        'Authorization': `Bearer ${apiKey}`
-                    }
+                const response = await fetch('/api/models/fetch_available', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        api_key: apiKey,
+                        base_url: baseUrl,
+                        model_provider: document.getElementById('modelProvider').value
+                    })
                 });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
+
                 const data = await response.json();
-                
-                if (data.data && Array.isArray(data.data)) {
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                if (Array.isArray(data.models)) {
                     // 按模型ID首字母排序
-                    availableModels = data.data.sort((a, b) => {
+                    availableModels = data.models.sort((a, b) => {
                         return a.id.toLowerCase().localeCompare(b.id.toLowerCase());
                     });
                     filteredModels = availableModels;
+                    modelsEmptyMessage = availableModels.length > 0
+                        ? '暂无模型数据'
+                        : '未返回模型数据，可在左侧手动填写模型 ID';
                     currentPage = 1;
                     document.getElementById('modelSearch').value = '';
                     displayModels();
@@ -718,9 +1326,10 @@
                 }
             } catch (error) {
                 console.error('获取模型列表失败:', error);
-                showStatus(`获取模型列表失败：${error.message}`, 'error');
+                showStatus(`获取模型列表失败：${error.message}。你仍可手动填写模型 ID 保存`, 'error');
                 availableModels = [];
                 filteredModels = [];
+                modelsEmptyMessage = '模型列表加载失败，可在左侧手动填写模型 ID';
                 displayModels();
             } finally {
                 fetchBtn.disabled = false;
@@ -739,7 +1348,7 @@
                     <div class="flex items-center justify-center h-full text-gray-400">
                         <div class="text-center">
                             <i class="fas fa-inbox text-4xl mb-2"></i>
-                            <p class="text-sm">${availableModels.length > 0 ? '没有匹配的模型' : '暂无模型数据'}</p>
+                            <p class="text-sm">${availableModels.length > 0 ? '没有匹配的模型' : modelsEmptyMessage}</p>
                         </div>
                     </div>
                 `;
@@ -761,7 +1370,7 @@
                 const colorClass = ownerColors[model.owned_by] || 'bg-gray-100 text-gray-700';
                 
                 return `
-                    <div class="px-3 py-2 border-b border-gray-200 hover:bg-indigo-50 cursor-pointer transition-colors" onclick="selectModel('${model.id}')">
+                    <div class="px-3 py-2 border-b border-gray-200 hover:bg-indigo-50 cursor-pointer transition-colors" onclick='selectModel(${JSON.stringify(model.id)})'>
                         <div class="flex items-center justify-between gap-2">
                             <div class="flex items-center gap-2 flex-1 min-w-0">
                                 ${model.owned_by ? `<span class="px-2 py-0.5 rounded text-xs font-medium ${colorClass} whitespace-nowrap">${model.owned_by}</span>` : ''}
@@ -802,8 +1411,32 @@
 
         // 选择模型
         function selectModel(modelId) {
+            const providerAlias = document.getElementById('modelAlias').value.trim();
+            const savedModel = currentModels.find(model => {
+                return (model.provider_alias || model.alias) === providerAlias && model.model_name === modelId;
+            });
+
             document.getElementById('modelName').value = modelId;
-            showStatus(`已选择模型：${modelId}`, 'success');
+            if (savedModel) {
+                setFormMode('edit');
+                originalAlias = savedModel.alias;
+                document.getElementById('modelSelector').value = savedModel.alias;
+                document.getElementById('maxTokens').value = savedModel.max_tokens || '';
+                const temp = savedModel.temperature != null ? savedModel.temperature : 0.7;
+                document.getElementById('temperature').value = temp;
+                document.getElementById('temperatureRange').value = temp;
+                document.getElementById('customPrompt').value = savedModel.custom_prompt || '';
+                showStatus(`已加载保存过的模型：${getModelDisplayName(savedModel)}`, 'success');
+                return;
+            }
+
+            originalAlias = '';
+            document.getElementById('modelSelector').value = '';
+            document.getElementById('maxTokens').value = '';
+            document.getElementById('temperature').value = '0.7';
+            document.getElementById('temperatureRange').value = '0.7';
+            document.getElementById('customPrompt').value = '';
+            showStatus(`已选择模型：${modelId}，设置参数和提示词后保存`, 'success');
         }
 
         // 上一页

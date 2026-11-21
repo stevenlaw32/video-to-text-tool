@@ -16,3 +16,5 @@ numpy<2.0.0
 opencv-python
 surya-ocr
 pillow
+markitdown
+alibabacloud-ocr-api20210707
