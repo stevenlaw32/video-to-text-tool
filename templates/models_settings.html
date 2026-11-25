@@ -41,6 +41,18 @@
         #modelsList::-webkit-scrollbar-thumb:hover {
             background: #555;
         }
+
+        .prompt-editor {
+            min-height: clamp(24rem, 52vh, 48rem);
+            line-height: 1.65;
+            resize: vertical;
+        }
+
+        @media (max-width: 640px) {
+            .prompt-editor {
+                min-height: 20rem;
+            }
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
@@ -87,7 +99,7 @@
 
         <!-- Model Configuration Form -->
         <div id="configForm" class="bg-white rounded-2xl shadow-xl p-8 hidden">
-            <div class="grid grid-cols-2 gap-8">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <!-- Left: Form Fields -->
                 <form id="modelForm" class="space-y-6">
                 <!-- Provider Selector -->
@@ -277,46 +289,6 @@
                     </div>
                 </div>
 
-                <!-- Custom Prompt -->
-                <div>
-                    <div class="flex items-center justify-between mb-2">
-                        <label for="customPrompt" class="text-sm font-semibold text-gray-700">
-                            <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>自定义提示词
-                            <span class="text-gray-500 text-xs font-normal ml-2">(可选)</span>
-                        </label>
-                        <div class="flex items-center gap-3">
-                            <span class="text-xs text-gray-400">默认模板</span>
-                            <button
-                                type="button"
-                                id="presetRestructureBtn"
-                                onclick="usePromptPreset('restructure')"
-                                class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-                            >
-                                整理重排
-                            </button>
-                            <button
-                                type="button"
-                                id="presetFaithfulBtn"
-                                onclick="usePromptPreset('faithful')"
-                                class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
-                            >
-                                尊重原文
-                            </button>
-                        </div>
-                    </div>
-                    <p class="text-xs text-gray-600 mb-2">
-                        <i class="fas fa-info-circle mr-1"></i>使用 <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">{transcript}</code> 作为占位符。点选模板后仍可再改。
-                    </p>
-                    <textarea 
-                        id="customPrompt" 
-                        rows="8"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm"
-                        placeholder="留空则使用「整理重排」..."
-                    ></textarea>
-                    <p class="text-xs text-gray-500 mt-1">
-                        为此模型设置专属的提示词。留空则使用「整理重排」。
-                    </p>
-                </div>
                 </form>
 
                 <!-- Right: Models List -->
@@ -360,6 +332,48 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Full-width Prompt Editor -->
+            <section id="promptEditorSection" class="mt-8 pt-8 border-t border-gray-200">
+                <div class="flex flex-col gap-3 mb-3 sm:flex-row sm:items-center sm:justify-between">
+                    <label for="customPrompt" class="text-sm font-semibold text-gray-700">
+                        <i class="fas fa-comment-dots mr-2 text-indigo-600"></i>自定义提示词
+                        <span class="text-gray-500 text-xs font-normal ml-2">(可选)</span>
+                    </label>
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <span class="text-xs text-gray-400">默认模板</span>
+                        <button
+                            type="button"
+                            id="presetRestructureBtn"
+                            onclick="usePromptPreset('restructure')"
+                            class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                        >
+                            整理重排
+                        </button>
+                        <button
+                            type="button"
+                            id="presetFaithfulBtn"
+                            onclick="usePromptPreset('faithful')"
+                            class="text-indigo-600 hover:text-indigo-800 text-sm font-medium"
+                        >
+                            尊重原文
+                        </button>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-600 mb-3">
+                    <i class="fas fa-info-circle mr-1"></i>使用 <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">{transcript}</code> 作为占位符。点选模板后仍可再改。
+                </p>
+                <textarea
+                    id="customPrompt"
+                    form="modelForm"
+                    rows="18"
+                    class="prompt-editor w-full px-4 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm"
+                    placeholder="留空则使用「整理重排」..."
+                ></textarea>
+                <p class="text-xs text-gray-500 mt-2">
+                    为此模型设置专属的提示词。留空则使用「整理重排」。编辑区域可从右下角继续拉高。
+                </p>
+            </section>
 
             <!-- Status Message - 内联显示 -->
             <div id="statusMessage" class="hidden mt-6">
